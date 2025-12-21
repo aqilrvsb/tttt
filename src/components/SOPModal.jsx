@@ -228,12 +228,21 @@ export default function SOPModal({ isOpen, onClose }) {
               </div>
             )}
 
-            <ol className="text-gray-300 space-y-2 list-decimal list-inside">
-              <li>Klik authorization link di atas</li>
-              <li>Log masuk dengan akaun <span className="text-yellow-400 font-medium">TikTok Seller</span> anda</li>
-              <li>Pilih shop anda dan klik <span className="text-tiktok-cyan">"Authorize"</span></li>
-              <li>Anda akan di-redirect ke URL seperti ini:</li>
-            </ol>
+            <div className="mb-4 p-4 bg-tiktok-pink/10 border border-tiktok-pink/30 rounded-lg">
+              <p className="text-white font-bold mb-2 flex items-center gap-2">
+                <span className="text-2xl">📋</span>
+                Cara Dapat Callback URL:
+              </p>
+              <ol className="text-gray-300 space-y-2 list-decimal list-inside text-sm">
+                <li><span className="text-tiktok-cyan font-medium">Klik Copy</span> authorization link di atas</li>
+                <li><span className="text-tiktok-cyan font-medium">Paste</span> dalam tab baru browser dan tekan Enter</li>
+                <li>Log masuk dengan akaun <span className="text-yellow-400 font-medium">TikTok Seller</span> anda</li>
+                <li>Pilih shop anda dan klik <span className="text-tiktok-cyan font-medium">"Authorize"</span></li>
+                <li><span className="text-yellow-400 font-medium">Proceed (teruskan)</span> sehingga ia jump ke localhost</li>
+                <li>Browser akan tunjuk error page (normal!), tapi <span className="text-green-400 font-medium">URL di address bar</span> adalah Callback URL anda!</li>
+              </ol>
+            </div>
+            <p className="text-gray-300 text-sm mb-2">Contoh Callback URL yang anda akan dapat:</p>
             <div className="bg-gray-900 p-3 rounded-lg font-mono text-xs mt-3 break-all">
               <span className="text-green-400">https://localhost/?app_key=xxx&code=ROW_xxxxx...&locale=en-GB&shop_region=MY</span>
             </div>
