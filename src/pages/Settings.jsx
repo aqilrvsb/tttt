@@ -193,10 +193,12 @@ export default function Settings() {
   };
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Settings</h1>
-        <p className="text-gray-600">Manage your TikTok Shop API credentials</p>
+    <div className="p-6 max-w-4xl mx-auto space-y-6">
+      <div>
+        <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-primary-600 to-blue-600 bg-clip-text text-transparent">
+          Settings
+        </h1>
+        <p className="text-gray-600 mt-2">Manage your TikTok Shop API credentials</p>
       </div>
 
       {/* Current Connection Status */}
