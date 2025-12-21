@@ -237,14 +237,16 @@ export default function Processed() {
   };
 
   return (
-    <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Processed Orders</h1>
-        <p className="text-gray-600">View orders that have been shipped or delivered</p>
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-primary-600 to-blue-600 bg-clip-text text-transparent">
+          Processed Orders
+        </h1>
+        <p className="text-gray-600 mt-2">View orders that have been shipped or delivered</p>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <StatsCard
           title="Total Processed"
           value={stats.totalOrders}

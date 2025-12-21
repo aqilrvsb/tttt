@@ -1,14 +1,12 @@
-import { useState } from 'react';
-
 const statusColors = {
-  'UNPAID': 'bg-gray-500/20 text-gray-400',
-  'AWAITING_SHIPMENT': 'bg-yellow-500/20 text-yellow-400',
-  'AWAITING_COLLECTION': 'bg-orange-500/20 text-orange-400',
-  'PARTIALLY_SHIPPING': 'bg-blue-500/20 text-blue-400',
-  'IN_TRANSIT': 'bg-blue-500/20 text-blue-400',
-  'DELIVERED': 'bg-green-500/20 text-green-400',
-  'COMPLETED': 'bg-green-500/20 text-green-400',
-  'CANCELLED': 'bg-red-500/20 text-red-400'
+  'UNPAID': 'bg-gray-100 text-gray-800',
+  'AWAITING_SHIPMENT': 'bg-yellow-100 text-yellow-800',
+  'AWAITING_COLLECTION': 'bg-orange-100 text-orange-800',
+  'PARTIALLY_SHIPPING': 'bg-blue-100 text-blue-800',
+  'IN_TRANSIT': 'bg-blue-100 text-blue-800',
+  'DELIVERED': 'bg-green-100 text-green-800',
+  'COMPLETED': 'bg-green-100 text-green-800',
+  'CANCELLED': 'bg-red-100 text-red-800'
 };
 
 const statusLabels = {
@@ -46,101 +44,109 @@ export default function OrderTable({ orders, selectedOrders, onSelectOrder, onSe
   };
 
   return (
-    <div className="card overflow-hidden p-0">
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
       <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead className="bg-gray-700/50">
-            <tr>
-              <th className="px-4 py-3 text-left">
+        <table className="w-full caption-bottom text-sm">
+          <thead className="border-b">
+            <tr className="border-b transition-colors hover:bg-gray-50/50">
+              <th className="h-12 px-4 text-left align-middle font-medium text-gray-600">
+                #
+              </th>
+              <th className="h-12 px-4 text-left align-middle font-medium text-gray-600">
                 <input
                   type="checkbox"
                   checked={allSelected}
                   ref={(el) => el && (el.indeterminate = someSelected)}
                   onChange={(e) => onSelectAll(e.target.checked)}
-                  className="w-4 h-4 rounded bg-gray-600 border-gray-500 text-tiktok-pink focus:ring-tiktok-pink cursor-pointer"
+                  className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 cursor-pointer"
                 />
               </th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Order ID</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Customer</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Phone</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Address</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Amount</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Status</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Date</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Actions</th>
+              <th className="h-12 px-4 text-left align-middle font-medium text-gray-600">Order ID</th>
+              <th className="h-12 px-4 text-left align-middle font-medium text-gray-600">Customer</th>
+              <th className="h-12 px-4 text-left align-middle font-medium text-gray-600">Phone</th>
+              <th className="h-12 px-4 text-left align-middle font-medium text-gray-600">Address</th>
+              <th className="h-12 px-4 text-left align-middle font-medium text-gray-600">Amount</th>
+              <th className="h-12 px-4 text-left align-middle font-medium text-gray-600">Status</th>
+              <th className="h-12 px-4 text-left align-middle font-medium text-gray-600">Date</th>
+              <th className="h-12 px-4 text-left align-middle font-medium text-gray-600">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-700">
+          <tbody>
             {orders.length === 0 ? (
               <tr>
-                <td colSpan="9" className="px-4 py-12 text-center text-gray-400">
-                  <div className="flex flex-col items-center gap-2">
-                    <svg className="w-12 h-12 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <td colSpan="10" className="px-4 py-12 text-center text-gray-500">
+                  <div className="flex flex-col items-center gap-3">
+                    <svg className="w-16 h-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                     </svg>
-                    <p>No orders found</p>
-                    <p className="text-sm">Click "Fetch Orders" to load orders</p>
+                    <div>
+                      <p className="font-medium text-gray-900">No orders found</p>
+                      <p className="text-sm text-gray-500 mt-1">Click "Fetch Orders" to load orders</p>
+                    </div>
                   </div>
                 </td>
               </tr>
             ) : (
-              orders.map((order) => {
+              orders.map((order, index) => {
                 const isSelected = selectedOrders.includes(order.id);
                 const customer = order.recipient_address || {};
 
                 return (
                   <tr
                     key={order.id}
-                    className={`hover:bg-gray-700/30 transition-colors ${isSelected ? 'bg-tiktok-pink/10' : ''}`}
+                    className={`border-b transition-colors hover:bg-gray-50/50 ${isSelected ? 'bg-primary-50' : ''}`}
                   >
-                    <td className="px-4 py-3">
+                    <td className="p-4 align-middle text-gray-500 font-medium">
+                      {index + 1}
+                    </td>
+                    <td className="p-4 align-middle">
                       <input
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => onSelectOrder(order.id)}
-                        className="w-4 h-4 rounded bg-gray-600 border-gray-500 text-tiktok-pink focus:ring-tiktok-pink cursor-pointer"
+                        className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 cursor-pointer"
                       />
                     </td>
-                    <td className="px-4 py-3">
-                      <span className="text-sm font-mono text-gray-300">
+                    <td className="p-4 align-middle">
+                      <span className="font-mono text-gray-900 font-medium">
                         {order.id?.slice(-8) || '-'}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className="text-sm text-white">
+                    <td className="p-4 align-middle">
+                      <span className="text-gray-900 font-medium">
                         {customer.name || '-'}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className="text-sm text-gray-300">
+                    <td className="p-4 align-middle">
+                      <span className="text-gray-700">
                         {customer.phone_number || '-'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 max-w-xs">
-                      <span className="text-sm text-gray-300 truncate block" title={customer.full_address}>
+                    <td className="p-4 align-middle max-w-xs">
+                      <span className="text-gray-700 truncate block" title={customer.full_address}>
                         {customer.full_address || '-'}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className="text-sm font-medium text-tiktok-cyan">
+                    <td className="p-4 align-middle">
+                      <span className="font-bold text-gray-900">
                         {formatPrice(order.payment?.total_amount, order.payment?.currency)}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${statusColors[order.status] || 'bg-gray-500/20 text-gray-400'}`}>
+                    <td className="p-4 align-middle">
+                      <span className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold ${statusColors[order.status] || 'bg-gray-100 text-gray-800'}`}>
                         {statusLabels[order.status] || order.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className="text-sm text-gray-400">
+                    <td className="p-4 align-middle">
+                      <span className="text-gray-600 text-sm">
                         {formatDate(order.create_time)}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="p-4 align-middle">
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => onViewDetails(order)}
-                          className="text-tiktok-cyan hover:text-tiktok-pink transition-colors"
+                          className="p-1.5 text-primary-600 hover:bg-primary-50 rounded transition-colors"
                           title="View Details"
                         >
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -151,7 +157,7 @@ export default function OrderTable({ orders, selectedOrders, onSelectOrder, onSe
                         {order.status === 'AWAITING_SHIPMENT' && (
                           <button
                             onClick={() => onShipOrder(order)}
-                            className="text-green-500 hover:text-green-400 transition-colors"
+                            className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors"
                             title="Ship Order"
                           >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
