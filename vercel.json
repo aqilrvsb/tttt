@@ -1,14 +1,8 @@
 {
   "functions": {
-    "api/tiktok/proxy.cjs": {
+    "api/tiktok/proxy.js": {
       "memory": 1024,
       "maxDuration": 10
     }
-  },
-  "rewrites": [
-    {
-      "source": "/api/tiktok/proxy",
-      "destination": "/api/tiktok/proxy.cjs"
-    }
-  ]
+  }
 }

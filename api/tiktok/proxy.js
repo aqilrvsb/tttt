@@ -1,5 +1,5 @@
-const crypto = require('crypto');
-const https = require('https');
+import crypto from 'crypto';
+import https from 'https';
 
 // Generate TikTok API signature
 function generateSignature(appSecret, path, params = {}, body = null) {
@@ -32,7 +32,7 @@ function generateSignature(appSecret, path, params = {}, body = null) {
 }
 
 // Main handler
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
