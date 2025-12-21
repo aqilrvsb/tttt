@@ -64,11 +64,57 @@ export async function updateCredentials(id, updates) {
   return data;
 }
 
+// Get user's credential ID
+export async function getUserCredentialId() {
+  // Get current authenticated user
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    throw new Error('User not authenticated');
+  }
+
+  // Get user's ID from users table using auth_user_id
+  const { data: userData, error: userDataError } = await supabase
+    .from('users')
+    .select('id')
+    .eq('auth_user_id', user.id)
+    .single();
+
+  if (userDataError || !userData) {
+    throw new Error('User profile not found. Please contact support.');
+  }
+
+  // Get the first credential for this user
+  const { data: credentialData, error: credentialError } = await supabase
+    .from('credentials')
+    .select('id')
+    .eq('user_id', userData.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (credentialError || !credentialData) {
+    throw new Error('No credentials found. Please add TikTok Shop credentials in Settings.');
+  }
+
+  return credentialData.id;
+}
+
 // Save order to history
 export async function saveOrder(order) {
+  // Get user's credential ID if not provided
+  let credentialId = order.credential_id;
+
+  if (!credentialId) {
+    credentialId = await getUserCredentialId();
+  }
+
   const { data, error } = await supabase
     .from('orders')
-    .upsert([order], { onConflict: 'order_id' })
+    .upsert([{
+      ...order,
+      credential_id: credentialId
+    }], { onConflict: 'order_id' })
     .select()
     .single();
 
