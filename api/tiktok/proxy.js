@@ -43,6 +43,13 @@ module.exports = async function handler(req, res) {
   }
 
   try {
+    // Log incoming request for debugging
+    console.log('Proxy request received:', {
+      method: req.method,
+      hasBody: !!req.body,
+      bodyType: typeof req.body
+    });
+
     // Parse request body
     const requestBody = req.body || {};
 
@@ -54,6 +61,15 @@ module.exports = async function handler(req, res) {
       appSecret,
       accessToken = null
     } = requestBody;
+
+    console.log('Parsed request:', {
+      method,
+      endpoint,
+      hasAppSecret: !!appSecret,
+      hasAccessToken: !!accessToken,
+      paramsKeys: Object.keys(params),
+      bodyKeys: body ? Object.keys(body) : null
+    });
 
     // Validation
     if (!endpoint) {
@@ -70,10 +86,8 @@ module.exports = async function handler(req, res) {
     }
 
     // Prepare request
-    // Get current time in GMT+8 (Malaysia timezone)
-    const now = new Date();
-    const malaysiaTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kuala_Lumpur' }));
-    const timestamp = Math.floor(malaysiaTime.getTime() / 1000);
+    // Use Unix timestamp (seconds since epoch)
+    const timestamp = Math.floor(Date.now() / 1000);
 
     const allParams = { ...params, timestamp };
 
@@ -97,6 +111,13 @@ module.exports = async function handler(req, res) {
     const queryString = new URLSearchParams(allParams).toString();
     const url = `${baseUrl}${endpoint}?${queryString}`;
 
+    console.log('Making request to:', {
+      baseUrl,
+      endpoint,
+      fullUrl: url.substring(0, 100) + '...',
+      method: method.toUpperCase()
+    });
+
     // Prepare headers
     const headers = {
       'Content-Type': 'application/json'
@@ -116,8 +137,22 @@ module.exports = async function handler(req, res) {
       fetchOptions.body = JSON.stringify(body);
     }
 
+    console.log('Fetching...', { url: url.substring(0, 80) });
     const response = await fetch(url, fetchOptions);
+
+    console.log('Response received:', {
+      status: response.status,
+      ok: response.ok,
+      statusText: response.statusText
+    });
+
     const data = await response.json();
+
+    console.log('Response data:', {
+      code: data.code,
+      message: data.message,
+      hasData: !!data.data
+    });
 
     // Return response with proper status
     return res.status(200).json(data);
