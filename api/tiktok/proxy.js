@@ -86,28 +86,33 @@ export default async function handler(req, res) {
       });
     }
 
-    // Prepare request
-    // Use Unix timestamp (seconds since epoch)
-    const timestamp = Math.floor(Date.now() / 1000);
-
-    const allParams = { ...params, timestamp };
-
-    // Generate signature (BEFORE adding sign to params)
-    const signature = generateSignature(
-      appSecret,
-      endpoint,
-      allParams,
-      body
-    );
-
-    // Add signature to params
-    allParams.sign = signature;
-
     // Build URL - use different base URL for auth endpoints
     const isAuthEndpoint = endpoint.startsWith('/api/v2/token');
     const baseUrl = isAuthEndpoint
       ? 'https://auth.tiktok-shops.com'
       : 'https://open-api.tiktokglobalshop.com';
+
+    let allParams;
+
+    if (isAuthEndpoint) {
+      // Auth endpoints don't use signature - they use app_secret directly
+      allParams = { ...params, app_secret: appSecret };
+    } else {
+      // Regular API endpoints use signature authentication
+      const timestamp = Math.floor(Date.now() / 1000);
+      allParams = { ...params, timestamp };
+
+      // Generate signature (BEFORE adding sign to params)
+      const signature = generateSignature(
+        appSecret,
+        endpoint,
+        allParams,
+        body
+      );
+
+      // Add signature to params
+      allParams.sign = signature;
+    }
 
     const queryString = new URLSearchParams(allParams).toString();
     const url = `${baseUrl}${endpoint}?${queryString}`;
