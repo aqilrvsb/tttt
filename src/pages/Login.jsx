@@ -83,10 +83,15 @@ export default function Login() {
     const { error: signUpError } = await signUp(registerEmail, registerPassword, registerName, registerShopName);
 
     if (signUpError) {
-      setError(signUpError);
+      // Check if it's an email validation error from Supabase
+      if (signUpError.includes('invalid')) {
+        setError('Registration failed. Please check your email address or try a different one.');
+      } else {
+        setError(signUpError);
+      }
       setLoading(false);
     } else {
-      setSuccess('Registration successful! Please check your email to confirm your account.');
+      setSuccess('Registration successful! You can now sign in with your credentials.');
       setLoading(false);
       // Clear form
       setRegisterName('');
@@ -94,6 +99,12 @@ export default function Login() {
       setRegisterEmail('');
       setRegisterPassword('');
       setRegisterConfirmPassword('');
+
+      // Auto switch to login form after 2 seconds
+      setTimeout(() => {
+        setIsRegister(false);
+        setSuccess('');
+      }, 2000);
     }
   };
 
