@@ -1,11 +1,4 @@
-import crypto from 'crypto';
-
-// CORS headers
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
+const crypto = require('crypto');
 
 // Generate TikTok API signature
 function generateSignature(appSecret, path, timestamp, params = {}, body = null) {
@@ -33,7 +26,11 @@ function generateSignature(appSecret, path, timestamp, params = {}, body = null)
 }
 
 // Main handler
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return res.status(200).json({});
@@ -107,11 +104,4 @@ export default async function handler(req, res) {
       message: error.message
     });
   }
-}
-
-// Apply CORS headers to all responses
-export const config = {
-  api: {
-    bodyParser: true,
-  },
 };
