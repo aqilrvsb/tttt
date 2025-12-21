@@ -70,7 +70,11 @@ module.exports = async function handler(req, res) {
     }
 
     // Prepare request
-    const timestamp = Math.floor(Date.now() / 1000) - 320; // Adjust for server time
+    // Get current time in GMT+8 (Malaysia timezone)
+    const now = new Date();
+    const malaysiaTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kuala_Lumpur' }));
+    const timestamp = Math.floor(malaysiaTime.getTime() / 1000);
+
     const allParams = { ...params, timestamp };
 
     // Generate signature (BEFORE adding sign to params)
