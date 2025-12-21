@@ -9,7 +9,9 @@
       "Bash(git config:*)",
       "Bash(git push:*)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd Vercel API proxy to fix CORS errors\n\n- Created /api/tiktok/proxy.js serverless function\n- Moved all TikTok API calls through backend proxy\n- Updated tiktokApi.js to use proxy endpoint\n- Improved SOP modal with clearer callback URL instructions\n- Fixed CORS issues when calling TikTok API from browser\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm install)"
     ]
   }
 }
