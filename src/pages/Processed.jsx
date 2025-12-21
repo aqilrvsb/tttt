@@ -6,7 +6,7 @@ import BulkActions from '../components/BulkActions';
 import OrderTable from '../components/OrderTable';
 import OrderDetailModal from '../components/OrderDetailModal';
 import { searchOrders, getOrderDetails, getShippingDocument } from '../lib/tiktokApi';
-import { saveOrder, mergeWaybills } from '../lib/supabase';
+import { saveOrder, mergeWaybills, getAllOrdersFromDB } from '../lib/supabase';
 
 export default function Processed() {
   const navigate = useNavigate();
@@ -67,6 +67,28 @@ export default function Processed() {
     }
   }, [navigate]);
 
+  // Load orders from Supabase on mount
+  useEffect(() => {
+    const loadOrdersFromDB = async () => {
+      try {
+        const dbOrders = await getAllOrdersFromDB();
+
+        // Convert DB orders back to TikTok order format
+        const convertedOrders = dbOrders
+          .filter(dbOrder => dbOrder.order_data) // Only orders with full data
+          .map(dbOrder => dbOrder.order_data);
+
+        if (convertedOrders.length > 0) {
+          setAllOrders(convertedOrders);
+        }
+      } catch (error) {
+        console.error('Failed to load orders from database:', error);
+      }
+    };
+
+    loadOrdersFromDB();
+  }, []);
+
   const handleFetchOrders = async (filters = {}) => {
     if (!credentials) return;
 
@@ -85,11 +107,20 @@ export default function Processed() {
         const details = await getOrderDetails(credentials, orderIds);
 
         const fetchedOrders = details.orders || data.orders;
-        setAllOrders(fetchedOrders);
+
+        // Get existing order IDs from current state
+        const existingOrderIds = new Set(allOrders.map(o => o.id));
+
+        // Filter out orders that already exist
+        const newOrders = fetchedOrders.filter(order => !existingOrderIds.has(order.id));
+
+        // Merge new orders with existing orders
+        const mergedOrders = [...newOrders, ...allOrders];
+        setAllOrders(mergedOrders);
         setPageToken(data.next_page_token);
 
-        // Auto-save to Supabase
-        for (const order of fetchedOrders) {
+        // Auto-save only NEW orders to Supabase
+        for (const order of newOrders) {
           try {
             await saveOrder({
               order_id: order.id,
@@ -101,13 +132,15 @@ export default function Processed() {
               currency: order.payment?.currency,
               created_at: new Date(order.create_time * 1000).toISOString(),
               updated_at: new Date(order.update_time * 1000).toISOString()
-            });
+            }, order); // Pass full order data as second parameter
           } catch (e) {
             console.warn(`Failed to save order ${order.id} to Supabase:`, e);
           }
         }
-      } else {
-        setAllOrders([]);
+
+        if (newOrders.length > 0) {
+          console.log(`Added ${newOrders.length} new orders. Skipped ${fetchedOrders.length - newOrders.length} duplicates.`);
+        }
       }
 
       setSelectedOrders([]);

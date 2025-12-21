@@ -100,8 +100,8 @@ export async function getUserCredentialId() {
   return credentialData.id;
 }
 
-// Save order to history
-export async function saveOrder(order) {
+// Save order to history (with full order data)
+export async function saveOrder(order, fullOrderData = null) {
   // Get user's credential ID if not provided
   let credentialId = order.credential_id;
 
@@ -109,17 +109,43 @@ export async function saveOrder(order) {
     credentialId = await getUserCredentialId();
   }
 
+  const orderRecord = {
+    ...order,
+    credential_id: credentialId
+  };
+
+  // If full order data is provided, store it in order_data column
+  if (fullOrderData) {
+    orderRecord.order_data = fullOrderData;
+  }
+
   const { data, error } = await supabase
     .from('orders')
-    .upsert([{
-      ...order,
-      credential_id: credentialId
-    }], { onConflict: 'order_id' })
+    .upsert([orderRecord], { onConflict: 'order_id' })
     .select()
     .single();
 
   if (error) throw error;
   return data;
+}
+
+// Get all orders from Supabase for current user
+export async function getAllOrdersFromDB() {
+  try {
+    const credentialId = await getUserCredentialId();
+
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('credential_id', credentialId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching orders from DB:', error);
+    return [];
+  }
 }
 
 // Get orders by credential ID
