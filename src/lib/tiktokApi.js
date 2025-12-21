@@ -118,7 +118,7 @@ export async function getOrderDetails(credentials, orderIds) {
 }
 
 // Get shipping document (waybill)
-export async function getShippingDocument(credentials, packageId, documentType = 'SHIPPING_LABEL') {
+export async function getShippingDocument(credentials, packageId, documentType = 'SHIPPING_LABEL', documentSize = 'A6') {
   return callTikTokApi(
     `/fulfillment/202309/packages/${packageId}/shipping_documents`,
     'GET',
@@ -126,7 +126,7 @@ export async function getShippingDocument(credentials, packageId, documentType =
       app_key: credentials.app_key,
       shop_cipher: credentials.shop_cipher,
       document_type: documentType,
-      document_size: 0
+      document_size: documentSize
     },
     null,
     credentials.app_secret,
