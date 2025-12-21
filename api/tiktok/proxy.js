@@ -1,22 +1,27 @@
 const crypto = require('crypto');
 
 // Generate TikTok API signature
-function generateSignature(appSecret, path, timestamp, params = {}, body = null) {
-  const sortedParams = Object.keys(params)
-    .sort()
-    .reduce((acc, key) => {
-      acc[key] = params[key];
-      return acc;
-    }, {});
+function generateSignature(appSecret, path, params = {}, body = null) {
+  // Remove sign and access_token from params before signing
+  const paramsToBeSigned = { ...params };
+  delete paramsToBeSigned.sign;
+  delete paramsToBeSigned.access_token;
 
+  // Sort params alphabetically
+  const sortedKeys = Object.keys(paramsToBeSigned).sort();
+
+  // Build string: key1value1key2value2...
   let paramString = '';
-  for (const [key, value] of Object.entries(sortedParams)) {
-    paramString += key + value;
-  }
+  sortedKeys.forEach(key => {
+    if (typeof paramsToBeSigned[key] !== 'object') {
+      paramString += `${key}${paramsToBeSigned[key]}`;
+    }
+  });
 
+  // Build final string: appSecret + path + params + body + appSecret
   let signString = appSecret + path + paramString;
 
-  if (body) {
+  if (body && Object.keys(body).length > 0) {
     signString += JSON.stringify(body);
   }
 
@@ -31,12 +36,16 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return res.status(200).json({});
+    return res.status(200).end();
   }
 
   try {
+    // Parse request body
+    const requestBody = req.body || {};
+
     const {
       method = 'GET',
       endpoint,
@@ -44,31 +53,43 @@ module.exports = async function handler(req, res) {
       body = null,
       appSecret,
       accessToken = null
-    } = req.body;
+    } = requestBody;
 
-    if (!endpoint || !appSecret) {
+    // Validation
+    if (!endpoint) {
       return res.status(400).json({
-        error: 'Missing required fields: endpoint, appSecret'
+        error: 'Missing required field: endpoint',
+        received: { endpoint, hasAppSecret: !!appSecret }
+      });
+    }
+
+    if (!appSecret) {
+      return res.status(400).json({
+        error: 'Missing required field: appSecret'
       });
     }
 
     // Prepare request
-    const timestamp = Math.floor(Date.now() / 1000);
+    const timestamp = Math.floor(Date.now() / 1000) - 320; // Adjust for server time
     const allParams = { ...params, timestamp };
 
-    // Generate signature
+    // Generate signature (BEFORE adding sign to params)
     const signature = generateSignature(
       appSecret,
       endpoint,
-      timestamp,
       allParams,
       body
     );
 
+    // Add signature to params
     allParams.sign = signature;
 
-    // Build URL
-    const baseUrl = 'https://open-api.tiktokglobalshop.com';
+    // Build URL - use different base URL for auth endpoints
+    const isAuthEndpoint = endpoint.startsWith('/api/v2/token');
+    const baseUrl = isAuthEndpoint
+      ? 'https://auth.tiktok-shops.com'
+      : 'https://open-api.tiktokglobalshop.com';
+
     const queryString = new URLSearchParams(allParams).toString();
     const url = `${baseUrl}${endpoint}?${queryString}`;
 
@@ -94,14 +115,16 @@ module.exports = async function handler(req, res) {
     const response = await fetch(url, fetchOptions);
     const data = await response.json();
 
-    // Return response
-    return res.status(response.ok ? 200 : response.status).json(data);
+    // Return response with proper status
+    return res.status(200).json(data);
 
   } catch (error) {
     console.error('TikTok API Proxy Error:', error);
+    console.error('Error stack:', error.stack);
     return res.status(500).json({
       error: 'Internal server error',
-      message: error.message
+      message: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };
