@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const https = require('https');
 
 // Generate TikTok API signature
 function generateSignature(appSecret, path, params = {}, body = null) {
