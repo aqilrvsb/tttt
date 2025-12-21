@@ -14,6 +14,7 @@ export default function Login() {
 
   // Register form
   const [registerName, setRegisterName] = useState('');
+  const [registerShopName, setRegisterShopName] = useState('');
   const [registerEmail, setRegisterEmail] = useState('');
   const [registerPassword, setRegisterPassword] = useState('');
   const [registerConfirmPassword, setRegisterConfirmPassword] = useState('');
@@ -25,6 +26,20 @@ export default function Login() {
     e.preventDefault();
     setError('');
     setLoading(true);
+
+    // Validate Gmail only
+    if (!loginEmail.toLowerCase().endsWith('@gmail.com')) {
+      setError('Email must be a Gmail address (@gmail.com)');
+      setLoading(false);
+      return;
+    }
+
+    // Validate minimum password length
+    if (loginPassword.length < 4) {
+      setError('Password must be at least 4 characters');
+      setLoading(false);
+      return;
+    }
 
     const { error: signInError } = await signIn(loginEmail, loginPassword);
 
@@ -44,6 +59,13 @@ export default function Login() {
     setSuccess('');
     setLoading(true);
 
+    // Validate Gmail only
+    if (!registerEmail.toLowerCase().endsWith('@gmail.com')) {
+      setError('Email must be a Gmail address (@gmail.com)');
+      setLoading(false);
+      return;
+    }
+
     // Validate passwords match
     if (registerPassword !== registerConfirmPassword) {
       setError('Passwords do not match');
@@ -52,13 +74,13 @@ export default function Login() {
     }
 
     // Validate password length
-    if (registerPassword.length < 8) {
-      setError('Password must be at least 8 characters');
+    if (registerPassword.length < 4) {
+      setError('Password must be at least 4 characters');
       setLoading(false);
       return;
     }
 
-    const { error: signUpError } = await signUp(registerEmail, registerPassword, registerName);
+    const { error: signUpError } = await signUp(registerEmail, registerPassword, registerName, registerShopName);
 
     if (signUpError) {
       setError(signUpError);
@@ -68,6 +90,7 @@ export default function Login() {
       setLoading(false);
       // Clear form
       setRegisterName('');
+      setRegisterShopName('');
       setRegisterEmail('');
       setRegisterPassword('');
       setRegisterConfirmPassword('');
@@ -113,7 +136,7 @@ export default function Login() {
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
                     className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    placeholder="you@example.com"
+                    placeholder="you@gmail.com"
                     required
                   />
                 </div>
@@ -191,14 +214,28 @@ export default function Login() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-2">
-                    Email Address
+                    Shop Name
+                  </label>
+                  <input
+                    type="text"
+                    value={registerShopName}
+                    onChange={(e) => setRegisterShopName(e.target.value)}
+                    className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="My TikTok Shop"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">
+                    Email Address (Gmail only)
                   </label>
                   <input
                     type="email"
                     value={registerEmail}
                     onChange={(e) => setRegisterEmail(e.target.value)}
                     className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    placeholder="you@example.com"
+                    placeholder="you@gmail.com"
                     required
                   />
                 </div>
@@ -212,9 +249,9 @@ export default function Login() {
                     value={registerPassword}
                     onChange={(e) => setRegisterPassword(e.target.value)}
                     className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    placeholder="At least 8 characters"
+                    placeholder="At least 4 characters"
                     required
-                    minLength={8}
+                    minLength={4}
                   />
                 </div>
 
@@ -229,7 +266,7 @@ export default function Login() {
                     className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
                     placeholder="Re-enter your password"
                     required
-                    minLength={8}
+                    minLength={4}
                   />
                 </div>
 

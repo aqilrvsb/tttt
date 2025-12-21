@@ -48,15 +48,19 @@ export default function Sidebar() {
       {/* User Info & Logout */}
       <div className="p-4 border-t border-gray-200">
         <div className="mb-3 bg-primary-50 rounded-lg p-3">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-2">
             <div className="w-8 h-8 rounded-full bg-primary-600 flex items-center justify-center text-white font-bold text-sm">
-              {user?.user_metadata?.full_name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || 'U'}
+              {user?.user_metadata?.shop_name?.charAt(0)?.toUpperCase() || user?.user_metadata?.full_name?.charAt(0)?.toUpperCase() || 'S'}
             </div>
-            <p className="text-sm text-gray-900 font-semibold">
-              {user?.user_metadata?.full_name || user?.email?.split('@')[0]}
-            </p>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-gray-900 font-bold truncate">
+                {user?.user_metadata?.shop_name || 'My Shop'}
+              </p>
+              <p className="text-xs text-gray-600 truncate">
+                {user?.user_metadata?.full_name || user?.email?.split('@')[0]}
+              </p>
+            </div>
           </div>
-          <p className="text-xs text-gray-600 truncate ml-10">{user?.email}</p>
         </div>
         <button
           onClick={() => signOut()}
