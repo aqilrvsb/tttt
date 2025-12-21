@@ -7,9 +7,31 @@ export const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Save credentials to Supabase
 export async function saveCredentials(credentials) {
+  // Get current authenticated user
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    throw new Error('User not authenticated');
+  }
+
+  // Get user's ID from users table using auth_user_id
+  const { data: userData, error: userDataError } = await supabase
+    .from('users')
+    .select('id')
+    .eq('auth_user_id', user.id)
+    .single();
+
+  if (userDataError || !userData) {
+    throw new Error('User profile not found. Please contact support.');
+  }
+
+  // Insert credentials with user_id
   const { data, error } = await supabase
     .from('credentials')
-    .insert([credentials])
+    .insert([{
+      ...credentials,
+      user_id: userData.id
+    }])
     .select()
     .single();
 
