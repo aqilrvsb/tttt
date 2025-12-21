@@ -244,6 +244,18 @@ export default function Orders() {
       return;
     }
 
+    // Check if orders have been shipped
+    const unshippedOrders = ordersToDownload.filter(o =>
+      !o.packages || o.packages.length === 0 ||
+      o.status === 'AWAITING_SHIPMENT' ||
+      o.status === 'UNPAID'
+    );
+
+    if (unshippedOrders.length > 0) {
+      alert(`Cannot print waybills for unshipped orders!\n\n${unshippedOrders.length} of ${ordersToDownload.length} selected orders haven't been shipped yet.\n\nPlease:\n1. Ship the orders first using "Ship Selected" button\n2. Then print waybills for shipped orders only\n\nNote: Only orders with status "In Transit", "Delivered", or "Completed" can have waybills printed.`);
+      return;
+    }
+
     setPrintLoading(true);
 
     try {
@@ -259,14 +271,16 @@ export default function Orders() {
             if (doc.doc_url) {
               waybillUrls.push(doc.doc_url);
             }
+          } else {
+            errors.push(`Order ${order.id?.slice(-8)}: No package ID found`);
           }
         } catch (e) {
-          errors.push(`Order ${order.id}: ${e.message}`);
+          errors.push(`Order ${order.id?.slice(-8)}: ${e.message}`);
         }
       }
 
       if (waybillUrls.length === 0) {
-        alert('No waybills available for selected orders.\n\nErrors:\n' + errors.join('\n'));
+        alert('No waybills available for selected orders.\n\nPossible reasons:\n- Orders not shipped yet\n- Shipping documents not ready\n\nErrors:\n' + errors.join('\n'));
         return;
       }
 
@@ -303,6 +317,23 @@ export default function Orders() {
   // Download individual waybills (legacy - opens each in new tab)
   const handleDownloadWaybills = async () => {
     const ordersToDownload = orders.filter(o => selectedOrders.includes(o.id));
+
+    if (ordersToDownload.length === 0) {
+      alert('Please select orders to download waybills');
+      return;
+    }
+
+    // Check if orders have been shipped
+    const unshippedOrders = ordersToDownload.filter(o =>
+      !o.packages || o.packages.length === 0 ||
+      o.status === 'AWAITING_SHIPMENT' ||
+      o.status === 'UNPAID'
+    );
+
+    if (unshippedOrders.length > 0) {
+      alert(`Cannot download waybills for unshipped orders!\n\n${unshippedOrders.length} of ${ordersToDownload.length} selected orders haven't been shipped yet.\n\nPlease ship the orders first, then download waybills.`);
+      return;
+    }
 
     for (const order of ordersToDownload) {
       try {
