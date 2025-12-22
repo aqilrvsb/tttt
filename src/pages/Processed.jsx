@@ -150,19 +150,35 @@ export default function Processed() {
 
         const fetchedOrders = details.orders || data.orders;
 
-        // Get existing order IDs from current state
-        const existingOrderIds = new Set(allOrders.map(o => o.id));
+        // Create map of existing orders by ID for quick lookup
+        const existingOrdersMap = new Map(allOrders.map(o => [o.id, o]));
 
-        // Filter out orders that already exist
-        const newOrders = fetchedOrders.filter(order => !existingOrderIds.has(order.id));
+        // Separate new orders and updated orders
+        const newOrders = [];
+        const updatedOrders = [];
 
-        // Merge new orders with existing orders
-        const mergedOrders = [...newOrders, ...allOrders];
+        for (const fetchedOrder of fetchedOrders) {
+          if (existingOrdersMap.has(fetchedOrder.id)) {
+            // Order exists - update it with latest data from API
+            updatedOrders.push(fetchedOrder);
+          } else {
+            // Order is new
+            newOrders.push(fetchedOrder);
+          }
+        }
+
+        // Create updated allOrders array:
+        // 1. Start with fetched orders (both new and updated with latest status)
+        // 2. Add existing orders that weren't in the fetch response
+        const fetchedOrderIds = new Set(fetchedOrders.map(o => o.id));
+        const unchangedOrders = allOrders.filter(o => !fetchedOrderIds.has(o.id));
+        const mergedOrders = [...fetchedOrders, ...unchangedOrders];
+
         setAllOrders(mergedOrders);
         setPageToken(data.next_page_token);
 
-        // Auto-save only NEW orders to Supabase
-        for (const order of newOrders) {
+        // Save ALL fetched orders to Supabase (upsert will handle updates)
+        for (const order of fetchedOrders) {
           try {
             await saveOrder({
               order_id: order.id,
@@ -180,8 +196,19 @@ export default function Processed() {
           }
         }
 
-        if (newOrders.length > 0) {
-          console.log(`Added ${newOrders.length} new orders. Skipped ${fetchedOrders.length - newOrders.length} duplicates.`);
+        console.log(`Fetched ${fetchedOrders.length} orders: ${newOrders.length} new, ${updatedOrders.length} updated`);
+
+        // If there are updated orders, log which ones changed status
+        if (updatedOrders.length > 0) {
+          const statusChanged = updatedOrders.filter(updated => {
+            const existing = existingOrdersMap.get(updated.id);
+            return existing && existing.status !== updated.status;
+          });
+          if (statusChanged.length > 0) {
+            console.log(`${statusChanged.length} orders changed status:`,
+              statusChanged.map(o => `${o.id.slice(-8)}: ${existingOrdersMap.get(o.id).status} → ${o.status}`)
+            );
+          }
         }
 
         // Show success
@@ -190,8 +217,8 @@ export default function Processed() {
           title: 'Success!',
           html: `<div>
             <p><strong>${fetchedOrders.length}</strong> orders fetched</p>
-            <p><strong>${newOrders.length}</strong> new orders added</p>
-            <p><strong>${fetchedOrders.length - newOrders.length}</strong> duplicates skipped</p>
+            <p><strong>${newOrders.length}</strong> new orders</p>
+            <p><strong>${updatedOrders.length}</strong> updated orders</p>
           </div>`,
           timer: 3000,
           showConfirmButton: false
