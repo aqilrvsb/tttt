@@ -66,6 +66,8 @@ export default function OrderTable({ orders, selectedOrders, onSelectOrder, onSe
               <th className="h-12 px-4 text-left align-middle font-medium text-gray-600">Phone</th>
               <th className="h-12 px-4 text-left align-middle font-medium text-gray-600">Address</th>
               <th className="h-12 px-4 text-left align-middle font-medium text-gray-600">Update Details</th>
+              <th className="h-12 px-4 text-left align-middle font-medium text-gray-600">Tracking Number</th>
+              <th className="h-12 px-4 text-left align-middle font-medium text-gray-600">Courier</th>
               <th className="h-12 px-4 text-left align-middle font-medium text-gray-600">Amount</th>
               <th className="h-12 px-4 text-left align-middle font-medium text-gray-600">Status</th>
               <th className="h-12 px-4 text-left align-middle font-medium text-gray-600">Date</th>
@@ -75,7 +77,7 @@ export default function OrderTable({ orders, selectedOrders, onSelectOrder, onSe
           <tbody>
             {orders.length === 0 ? (
               <tr>
-                <td colSpan="11" className="px-4 py-12 text-center text-gray-500">
+                <td colSpan="13" className="px-4 py-12 text-center text-gray-500">
                   <div className="flex flex-col items-center gap-3">
                     <svg className="w-16 h-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
@@ -91,6 +93,7 @@ export default function OrderTable({ orders, selectedOrders, onSelectOrder, onSe
               orders.map((order, index) => {
                 const isSelected = selectedOrders.includes(order.id);
                 const customer = order.recipient_address || {};
+                const packageInfo = order.packages?.[0] || {};
 
                 // Check if order has complete details (not masked)
                 const hasCompleteDetails = customer.name && customer.phone_number && customer.full_address &&
@@ -144,6 +147,16 @@ export default function OrderTable({ orders, selectedOrders, onSelectOrder, onSe
                         />
                       </td>
                     )}
+                    <td className="p-4 align-middle">
+                      <span className="text-gray-700 font-mono text-xs">
+                        {packageInfo.tracking_number || '-'}
+                      </span>
+                    </td>
+                    <td className="p-4 align-middle">
+                      <span className="text-gray-700 text-sm">
+                        {packageInfo.shipping_provider || '-'}
+                      </span>
+                    </td>
                     <td className="p-4 align-middle">
                       <span className="font-bold text-gray-900">
                         {formatPrice(order.payment?.total_amount, order.payment?.currency)}
