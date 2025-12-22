@@ -98,7 +98,7 @@ export default function Processed() {
     loadCredentials();
   }, []);
 
-  // Load orders from Supabase on mount and auto-refresh if masked
+  // Load orders from Supabase on mount and auto-refresh status
   useEffect(() => {
     const loadOrdersFromDB = async () => {
       try {
@@ -116,24 +116,15 @@ export default function Processed() {
         if (convertedOrders.length > 0) {
           setAllOrders(convertedOrders);
 
-          // Check if any shipped orders (NOT COMPLETED) have masked data
-          const shippedNotCompleted = convertedOrders.filter(o =>
+          // Get shipped orders that are NOT yet COMPLETED (status might need updating)
+          const activeShippedOrders = convertedOrders.filter(o =>
             ['AWAITING_COLLECTION', 'IN_TRANSIT', 'DELIVERED'].includes(o.status)
           );
 
-          const maskedOrders = shippedNotCompleted.filter(order => {
-            const name = order.recipient_address?.name || '';
-            const phone = order.recipient_address?.phone_number || '';
-            const address = order.recipient_address?.full_address || '';
-            return name.includes('***') || name.includes('**') ||
-                   phone.includes('***') || phone.includes('*****') ||
-                   address.includes('***') || address.includes('**');
-          });
-
-          // If we have credentials and masked orders, silently refresh to unmask
-          if (maskedOrders.length > 0 && credentials) {
-            console.log(`Detected ${maskedOrders.length} masked orders in shipped (not completed), silently refreshing from API...`);
-            silentRefreshForUnmasking(maskedOrders);
+          // If we have credentials and active shipped orders, silently check for status updates
+          if (activeShippedOrders.length > 0 && credentials) {
+            console.log(`Found ${activeShippedOrders.length} active shipped orders, checking for status updates...`);
+            silentRefreshOrderStatus(activeShippedOrders);
           }
         }
 
@@ -157,28 +148,27 @@ export default function Processed() {
     }
   }, [credentials]);
 
-  // Silent refresh to unmask customer data (no UI popup)
-  // This only calls getOrderDetails for specific masked orders, does NOT search for new orders
-  const silentRefreshForUnmasking = async (maskedOrders) => {
+  // Silent refresh to check order status updates (no UI popup)
+  // Checks if orders have moved from AWAITING_COLLECTION → IN_TRANSIT → DELIVERED → COMPLETED
+  const silentRefreshOrderStatus = async (ordersToCheck) => {
     if (!credentials) {
-      console.warn('Cannot unmask orders: No credentials available');
+      console.warn('Cannot check status: No credentials available');
       return;
     }
 
-    if (!maskedOrders || maskedOrders.length === 0) {
-      console.log('No masked orders to unmask');
+    if (!ordersToCheck || ordersToCheck.length === 0) {
+      console.log('No orders to check status');
       return;
     }
 
     try {
-      console.log(`🔍 Checking ${maskedOrders.length} masked orders for unmasking...`);
-      console.log('Order IDs:', maskedOrders.map(o => o.id.slice(-8)).join(', '));
+      console.log(`🔍 Checking status for ${ordersToCheck.length} shipped orders...`);
 
-      // Get order IDs that need unmasking
-      const orderIds = maskedOrders.map(o => o.id);
+      // Get order IDs
+      const orderIds = ordersToCheck.map(o => o.id);
 
-      // Call getOrderDetails API to get unmasked data
-      console.log('📞 Calling getOrderDetails API...');
+      // Call getOrderDetails API to get latest status
+      console.log('📞 Calling getOrderDetails API for status update...');
       const details = await getOrderDetails(credentials, orderIds);
       const fetchedOrders = details.orders || [];
 
@@ -189,69 +179,82 @@ export default function Processed() {
         return;
       }
 
-      // Update local state and database
-      let unmaskedCount = 0;
-      let stillMaskedCount = 0;
+      // Check for status changes and update
+      let statusChangedCount = 0;
+      const dbOrders = await getAllOrdersFromDB();
+      const dbOrdersMap = new Map(
+        dbOrders
+          .filter(o => o.order_data)
+          .map(o => [o.order_data.id, o.order_data])
+      );
 
       for (const fetchedOrder of fetchedOrders) {
-        const originalOrder = maskedOrders.find(o => o.id === fetchedOrder.id);
+        const originalOrder = ordersToCheck.find(o => o.id === fetchedOrder.id);
+        const dbOrder = dbOrdersMap.get(fetchedOrder.id);
 
-        if (!originalOrder) {
-          console.warn(`Order ${fetchedOrder.id.slice(-8)} not found in original masked orders`);
-          continue;
+        if (!originalOrder) continue;
+
+        const oldStatus = originalOrder.status;
+        const newStatus = fetchedOrder.status;
+
+        // Check if status changed
+        if (oldStatus !== newStatus) {
+          statusChangedCount++;
+          console.log(`📦 Order ${fetchedOrder.id.slice(-8)}: ${oldStatus} → ${newStatus}`);
         }
 
-        // Check if the fetched data is now unmasked
-        const fetchedName = fetchedOrder.recipient_address?.name || '';
-        const originalName = originalOrder.recipient_address?.name || '';
-        const fetchedPhone = fetchedOrder.recipient_address?.phone_number || '';
+        // Preserve unmasked customer data from database if new data is masked
+        let finalRecipientAddress = fetchedOrder.recipient_address;
 
-        console.log(`Order ${fetchedOrder.id.slice(-8)}:`);
-        console.log(`  Original name: ${originalName}`);
-        console.log(`  Fetched name: ${fetchedName}`);
-        console.log(`  Fetched phone: ${fetchedPhone}`);
+        if (dbOrder && dbOrder.recipient_address) {
+          const dbName = dbOrder.recipient_address.name || '';
+          const fetchedName = fetchedOrder.recipient_address?.name || '';
 
-        const isStillMasked = fetchedName.includes('***') || fetchedName.includes('**');
-        const wasUnmasked = !isStillMasked && originalName.includes('***');
+          // If DB has unmasked data but fetched is masked, preserve DB data
+          const dbIsUnmasked = !dbName.includes('***');
+          const fetchedIsMasked = fetchedName.includes('***');
 
-        if (wasUnmasked) {
-          unmaskedCount++;
-          console.log(`  ✅ Successfully unmasked!`);
-        } else if (isStillMasked) {
-          stillMaskedCount++;
-          console.log(`  ⚠️ Still masked (TikTok may have already masked this order)`);
+          if (dbIsUnmasked && fetchedIsMasked) {
+            console.log(`  🔐 Preserving unmasked customer data from database`);
+            finalRecipientAddress = dbOrder.recipient_address;
+          }
         }
 
-        // Update in allOrders state (regardless of mask status, update with latest data)
+        // Update order with preserved customer data
+        const updatedOrder = {
+          ...fetchedOrder,
+          recipient_address: finalRecipientAddress,
+          saved_waybill_url: originalOrder.saved_waybill_url
+        };
+
+        // Update in allOrders state
         setAllOrders(prev => prev.map(o =>
-          o.id === fetchedOrder.id ? { ...fetchedOrder, saved_waybill_url: o.saved_waybill_url } : o
+          o.id === updatedOrder.id ? updatedOrder : o
         ));
 
         // Save to database
         try {
           await saveOrder({
-            order_id: fetchedOrder.id,
-            order_status: fetchedOrder.status,
-            customer_name: fetchedOrder.recipient_address?.name,
-            customer_phone: fetchedOrder.recipient_address?.phone_number,
-            customer_address: fetchedOrder.recipient_address?.full_address,
-            total_amount: fetchedOrder.payment?.total_amount,
-            currency: fetchedOrder.payment?.currency,
-            created_at: new Date(fetchedOrder.create_time * 1000).toISOString(),
-            updated_at: new Date(fetchedOrder.update_time * 1000).toISOString()
-          }, fetchedOrder);
-          console.log(`  💾 Saved to database`);
+            order_id: updatedOrder.id,
+            order_status: updatedOrder.status,
+            customer_name: finalRecipientAddress?.name,
+            customer_phone: finalRecipientAddress?.phone_number,
+            customer_address: finalRecipientAddress?.full_address,
+            total_amount: updatedOrder.payment?.total_amount,
+            currency: updatedOrder.payment?.currency,
+            created_at: new Date(updatedOrder.create_time * 1000).toISOString(),
+            updated_at: new Date(updatedOrder.update_time * 1000).toISOString()
+          }, updatedOrder);
         } catch (e) {
-          console.error(`  ❌ Failed to save to database:`, e);
+          console.error(`❌ Failed to save order ${updatedOrder.id} to database:`, e);
         }
       }
 
       console.log(`\n📊 Summary:`);
-      console.log(`  - Successfully unmasked: ${unmaskedCount}`);
-      console.log(`  - Still masked: ${stillMaskedCount}`);
-      console.log(`  - Total processed: ${fetchedOrders.length}`);
+      console.log(`  - Status changed: ${statusChangedCount} orders`);
+      console.log(`  - No change: ${fetchedOrders.length - statusChangedCount} orders`);
     } catch (error) {
-      console.error('❌ Silent refresh failed:', error);
+      console.error('❌ Silent status refresh failed:', error);
       console.error('Error details:', error.message);
     }
   };
