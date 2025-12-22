@@ -31,10 +31,10 @@ export default function Processed() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedOrderForDetail, setSelectedOrderForDetail] = useState(null);
 
-  // Filter orders - only processed orders + apply client-side filters
+  // Filter orders - "Shipped" tab (match TikTok Shop)
   const orders = useMemo(() => {
     let filtered = allOrders.filter(o =>
-      ['IN_TRANSIT', 'AWAITING_COLLECTION', 'DELIVERED', 'COMPLETED'].includes(o.status)
+      ['AWAITING_COLLECTION', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'].includes(o.status)
     );
 
     // Apply client-side date filters
@@ -56,7 +56,7 @@ export default function Processed() {
     return filtered;
   }, [allOrders, clientFilters]);
 
-  // Stats for processed orders
+  // Stats for "Shipped" orders (match TikTok Shop)
   const stats = useMemo(() => {
     const uniqueCustomers = new Set(orders.map(o => o.recipient_address?.phone_number).filter(Boolean));
     const totalAmount = orders.reduce((sum, o) => sum + (parseFloat(o.payment?.total_amount) || 0), 0);
@@ -65,8 +65,8 @@ export default function Processed() {
     return {
       totalOrders: orders.length,
       totalCustomers: uniqueCustomers.size,
-      inTransit: orders.filter(o => o.status === 'IN_TRANSIT').length,
       awaitingCollection: orders.filter(o => o.status === 'AWAITING_COLLECTION').length,
+      inTransit: orders.filter(o => o.status === 'IN_TRANSIT').length,
       delivered: orders.filter(o => ['DELIVERED', 'COMPLETED'].includes(o.status)).length,
       totalPrice: totalAmount,
       currency
@@ -337,15 +337,15 @@ export default function Processed() {
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-primary-600 to-blue-600 bg-clip-text text-transparent">
-          Processed Orders
+          Shipped
         </h1>
-        <p className="text-gray-600 mt-2">View orders that have been shipped or delivered</p>
+        <p className="text-gray-600 mt-2">Orders that have been shipped and on the way to customers</p>
       </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <StatsCard
-          title="Total Processed"
+          title="Total Shipped"
           value={stats.totalOrders}
           color="cyan"
           icon={

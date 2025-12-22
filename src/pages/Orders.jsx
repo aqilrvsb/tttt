@@ -5,9 +5,8 @@ import StatsCard from '../components/StatsCard';
 import FilterBar from '../components/FilterBar';
 import BulkActions from '../components/BulkActions';
 import OrderTable from '../components/OrderTable';
-import ShippingModal from '../components/ShippingModal';
 import OrderDetailModal from '../components/OrderDetailModal';
-import { searchOrders, getOrderDetails, shipPackage, getShippingDocument } from '../lib/tiktokApi';
+import { searchOrders, getOrderDetails, getShippingDocument } from '../lib/tiktokApi';
 import { saveOrder, mergeWaybills, getAllOrdersFromDB } from '../lib/supabase';
 
 export default function Orders() {
@@ -30,15 +29,13 @@ export default function Orders() {
   // UI state
   const [loading, setLoading] = useState(false);
   const [printLoading, setPrintLoading] = useState(false);
-  const [shippingLoading, setShippingLoading] = useState(false);
-  const [showShippingModal, setShowShippingModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedOrderForDetail, setSelectedOrderForDetail] = useState(null);
 
-  // Filter orders - only pending orders + apply client-side filters
+  // Filter orders - "To Ship" tab (match TikTok Shop)
   const orders = useMemo(() => {
     let filtered = allOrders.filter(o =>
-      ['AWAITING_SHIPMENT', 'UNPAID', 'PARTIALLY_SHIPPING', 'ON_HOLD'].includes(o.status)
+      ['AWAITING_SHIPMENT', 'UNPAID'].includes(o.status)
     );
 
     // Apply client-side date filters
@@ -60,7 +57,7 @@ export default function Orders() {
     return filtered;
   }, [allOrders, clientFilters]);
 
-  // Stats for pending orders
+  // Stats for "To Ship" orders (match TikTok Shop)
   const stats = useMemo(() => {
     const uniqueCustomers = new Set(orders.map(o => o.recipient_address?.phone_number).filter(Boolean));
     const totalAmount = orders.reduce((sum, o) => sum + (parseFloat(o.payment?.total_amount) || 0), 0);
@@ -71,7 +68,6 @@ export default function Orders() {
       totalCustomers: uniqueCustomers.size,
       awaitingShipment: orders.filter(o => o.status === 'AWAITING_SHIPMENT').length,
       unpaid: orders.filter(o => o.status === 'UNPAID').length,
-      onHold: orders.filter(o => o.status === 'ON_HOLD').length,
       totalPrice: totalAmount,
       currency
     };
@@ -242,63 +238,6 @@ export default function Orders() {
     }
   };
 
-  const handleShipOrder = async (order) => {
-    if (!credentials) return { success: false };
-
-    try {
-      // Get package ID from order
-      const packageId = order.packages?.[0]?.id;
-
-      if (!packageId) {
-        throw new Error('No package found for this order');
-      }
-
-      // Ship the package
-      await shipPackage(credentials, packageId, 'PICKUP');
-
-      // Try to get waybill
-      let waybillUrl = null;
-      try {
-        const doc = await getShippingDocument(credentials, packageId, 'SHIPPING_LABEL');
-        waybillUrl = doc.doc_url;
-      } catch (e) {
-        console.warn('Could not get waybill:', e);
-      }
-
-      // Save to Supabase
-      try {
-        await saveOrder({
-          order_id: order.id,
-          order_status: 'SHIPPED',
-          customer_name: order.recipient_address?.name,
-          customer_phone: order.recipient_address?.phone_number,
-          customer_address: order.recipient_address?.full_address,
-          total_amount: order.payment?.total_amount,
-          shipped_at: new Date().toISOString(),
-          waybill_url: waybillUrl
-        });
-      } catch (e) {
-        console.warn('Failed to save to Supabase:', e);
-      }
-
-      return { success: true, waybillUrl };
-    } catch (error) {
-      throw error;
-    }
-  };
-
-  const handleBulkShip = () => {
-    const ordersToShip = orders.filter(o =>
-      selectedOrders.includes(o.id) && o.status === 'AWAITING_SHIPMENT'
-    );
-
-    if (ordersToShip.length === 0) {
-      alert('No orders available for shipping. Only orders with "Awaiting Shipment" status can be shipped.');
-      return;
-    }
-
-    setShowShippingModal(true);
-  };
 
   // Bulk print waybills - fetch all and merge into single PDF
   const handleBulkPrintWaybills = async () => {
@@ -408,17 +347,13 @@ export default function Orders() {
     }).format(amount);
   };
 
-  const selectedOrdersForShipping = orders.filter(o =>
-    selectedOrders.includes(o.id) && o.status === 'AWAITING_SHIPMENT'
-  );
-
   return (
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-primary-600 to-blue-600 bg-clip-text text-transparent">
-          Orders
+          To Ship
         </h1>
-        <p className="text-gray-600 mt-2">Manage pending orders awaiting shipment</p>
+        <p className="text-gray-600 mt-2">Orders ready to be packed and shipped</p>
       </div>
 
       {/* Stats Cards */}
@@ -485,10 +420,8 @@ export default function Orders() {
       {/* Bulk Actions */}
       <BulkActions
         selectedCount={selectedOrders.length}
-        onShipSelected={handleBulkShip}
         onPrintWaybills={handleBulkPrintWaybills}
         onDownloadWaybills={handleDownloadWaybills}
-        loading={shippingLoading}
         printLoading={printLoading}
         activeTab="order"
       />
@@ -499,10 +432,6 @@ export default function Orders() {
         selectedOrders={selectedOrders}
         onSelectOrder={handleSelectOrder}
         onSelectAll={handleSelectAll}
-        onShipOrder={(order) => {
-          setSelectedOrders([order.id]);
-          setShowShippingModal(true);
-        }}
         onViewDetails={handleViewDetails}
       />
 
@@ -510,18 +439,6 @@ export default function Orders() {
       <div className="text-center text-gray-500 text-sm mt-6">
         Showing {orders.length} orders
       </div>
-
-      {/* Shipping Modal */}
-      <ShippingModal
-        isOpen={showShippingModal}
-        onClose={() => {
-          setShowShippingModal(false);
-          handleRefresh();
-        }}
-        orders={selectedOrdersForShipping}
-        onShip={handleShipOrder}
-        credentials={credentials}
-      />
 
       {/* Order Detail Modal */}
       <OrderDetailModal

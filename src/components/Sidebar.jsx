@@ -8,8 +8,8 @@ export default function Sidebar() {
   const isActive = (path) => location.pathname === path;
 
   const navItems = [
-    { path: '/orders', icon: '📦', label: 'Orders' },
-    { path: '/processed', icon: '✅', label: 'Processed' },
+    { path: '/orders', icon: '📦', label: 'To Ship' },
+    { path: '/processed', icon: '✅', label: 'Shipped' },
     { path: '/settings', icon: '⚙️', label: 'Settings' },
   ];
 
