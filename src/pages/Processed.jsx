@@ -30,6 +30,7 @@ export default function Processed() {
   // UI state
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedOrderForDetail, setSelectedOrderForDetail] = useState(null);
+  const [refreshingOrderId, setRefreshingOrderId] = useState(null);
 
   // Filter orders - "Shipped" tab (match TikTok Shop)
   const orders = useMemo(() => {
@@ -256,6 +257,126 @@ export default function Processed() {
     } catch (error) {
       console.error('❌ Silent status refresh failed:', error);
       console.error('Error details:', error.message);
+    }
+  };
+
+  // Refresh single order to check if unmasked
+  const handleRefreshOrder = async (order) => {
+    if (!credentials) {
+      Swal.fire({
+        icon: 'error',
+        title: 'No Credentials',
+        text: 'Please add TikTok Shop credentials in Settings.'
+      });
+      return;
+    }
+
+    setRefreshingOrderId(order.id);
+
+    try {
+      // Fetch latest order details from API
+      const details = await getOrderDetails(credentials, [order.id]);
+      const fetchedOrders = details.orders || [];
+
+      if (fetchedOrders.length === 0) {
+        throw new Error('Order not found in API response');
+      }
+
+      const fetchedOrder = fetchedOrders[0];
+
+      // Check if data is masked or unmasked
+      const name = fetchedOrder.recipient_address?.name || '';
+      const phone = fetchedOrder.recipient_address?.phone_number || '';
+      const address = fetchedOrder.recipient_address?.full_address || '';
+
+      const isNameMasked = name.includes('***');
+      const isPhoneMasked = phone.includes('***');
+      const isAddressMasked = address.includes('***');
+
+      const isMasked = isNameMasked || isPhoneMasked || isAddressMasked;
+
+      // Get DB order to preserve unmasked data if exists
+      const dbOrders = await getAllOrdersFromDB();
+      const dbOrder = dbOrders.find(o => o.order_data?.id === order.id)?.order_data;
+
+      let finalRecipientAddress = fetchedOrder.recipient_address;
+
+      // If DB has unmasked data but fetched is masked, preserve DB data
+      if (dbOrder && dbOrder.recipient_address) {
+        const dbName = dbOrder.recipient_address.name || '';
+        const dbIsUnmasked = !dbName.includes('***');
+
+        if (dbIsUnmasked && isMasked) {
+          finalRecipientAddress = dbOrder.recipient_address;
+        }
+      }
+
+      // Update order with latest data
+      const updatedOrder = {
+        ...fetchedOrder,
+        recipient_address: finalRecipientAddress,
+        saved_waybill_url: order.saved_waybill_url
+      };
+
+      // Update in state
+      setAllOrders(prev => prev.map(o =>
+        o.id === updatedOrder.id ? updatedOrder : o
+      ));
+
+      // Save to database
+      await saveOrder({
+        order_id: updatedOrder.id,
+        order_status: updatedOrder.status,
+        customer_name: finalRecipientAddress?.name,
+        customer_phone: finalRecipientAddress?.phone_number,
+        customer_address: finalRecipientAddress?.full_address,
+        total_amount: updatedOrder.payment?.total_amount,
+        currency: updatedOrder.payment?.currency,
+        created_at: new Date(updatedOrder.create_time * 1000).toISOString(),
+        updated_at: new Date(updatedOrder.update_time * 1000).toISOString()
+      }, updatedOrder);
+
+      // Show result
+      if (isMasked) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Still Masked',
+          html: `
+            <p class="text-gray-700 mb-3">Customer data is still <strong>masked</strong>:</p>
+            <ul class="text-left text-sm space-y-1">
+              <li>Name: ${isNameMasked ? '🔒 Masked' : '✅ Unmasked'}</li>
+              <li>Phone: ${isPhoneMasked ? '🔒 Masked' : '✅ Unmasked'}</li>
+              <li>Address: ${isAddressMasked ? '🔒 Masked' : '✅ Unmasked'}</li>
+            </ul>
+            <p class="text-sm text-gray-600 mt-3">Click the blue link to open TikTok and unmask manually.</p>
+          `,
+          confirmButtonText: 'OK'
+        });
+      } else {
+        Swal.fire({
+          icon: 'success',
+          title: 'Unmasked!',
+          html: `
+            <p class="text-gray-700 mb-3">Customer data is <strong>unmasked</strong>:</p>
+            <ul class="text-left text-sm space-y-1">
+              <li>✅ Name: ${name}</li>
+              <li>✅ Phone: ${phone}</li>
+              <li>✅ Address: ${address.substring(0, 50)}${address.length > 50 ? '...' : ''}</li>
+            </ul>
+            <p class="text-sm text-green-600 mt-3">Data has been saved to database!</p>
+          `,
+          confirmButtonText: 'Great!'
+        });
+      }
+    } catch (error) {
+      console.error('Failed to refresh order:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Refresh Failed',
+        text: error.message || 'Failed to fetch order details. Please try again.'
+      });
+    } finally {
+      setRefreshingOrderId(null);
     }
   };
 
@@ -646,6 +767,8 @@ export default function Processed() {
         onSelectOrder={handleSelectOrder}
         onSelectAll={handleSelectAll}
         onViewDetails={handleViewDetails}
+        onRefreshOrder={handleRefreshOrder}
+        refreshingOrderId={refreshingOrderId}
       />
 
       {/* Order Detail Modal */}

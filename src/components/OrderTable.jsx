@@ -20,7 +20,7 @@ const statusLabels = {
   'CANCELLED': 'Cancelled'
 };
 
-export default function OrderTable({ orders, selectedOrders, onSelectOrder, onSelectAll, onShipOrder, onViewDetails }) {
+export default function OrderTable({ orders, selectedOrders, onSelectOrder, onSelectAll, onShipOrder, onViewDetails, onRefreshOrder, refreshingOrderId }) {
   const allSelected = orders.length > 0 && selectedOrders.length === orders.length;
   const someSelected = selectedOrders.length > 0 && selectedOrders.length < orders.length;
 
@@ -154,6 +154,36 @@ export default function OrderTable({ orders, selectedOrders, onSelectOrder, onSe
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                           </svg>
                         </button>
+                        <a
+                          href={`https://seller-my.tiktok.com/order/detail?order_no=${order.id}&shop_region=MY`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          title="Open in TikTok Seller Center"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                        {onRefreshOrder && (
+                          <button
+                            onClick={() => onRefreshOrder(order)}
+                            disabled={refreshingOrderId === order.id}
+                            className="p-1.5 text-orange-600 hover:bg-orange-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Refresh order details to check if unmasked"
+                          >
+                            {refreshingOrderId === order.id ? (
+                              <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                              </svg>
+                            ) : (
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                              </svg>
+                            )}
+                          </button>
+                        )}
                         {order.status === 'AWAITING_SHIPMENT' && (
                           <button
                             onClick={() => onShipOrder(order)}
