@@ -24,16 +24,14 @@ export default function FilterBar({ onFetch, onFilterChange, loading, statusOpti
   const handleFetch = (e) => {
     e.preventDefault();
 
-    if (!fetchDate) {
-      alert('Please select a date to fetch orders');
-      return;
-    }
+    const fetchParams = {};
 
-    const fetchParams = {
-      create_time_ge: Math.floor(new Date(fetchDate).getTime() / 1000),
-      // Fetch for the entire day
-      create_time_lt: Math.floor(new Date(fetchDate).getTime() / 1000) + 86400
-    };
+    // If date is selected, fetch for that specific date
+    if (fetchDate) {
+      fetchParams.create_time_ge = Math.floor(new Date(fetchDate).getTime() / 1000);
+      fetchParams.create_time_lt = Math.floor(new Date(fetchDate).getTime() / 1000) + 86400;
+    }
+    // If no date selected, fetch all orders (TikTok API will use default range)
 
     onFetch(fetchParams);
   };
@@ -47,13 +45,14 @@ export default function FilterBar({ onFetch, onFilterChange, loading, statusOpti
           <div className="flex flex-wrap items-end gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Fetch Date
+                Fetch Date <span className="text-gray-500 font-normal">(optional - leave empty for all)</span>
               </label>
               <input
                 type="date"
                 value={fetchDate}
                 onChange={(e) => setFetchDate(e.target.value)}
                 className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                placeholder="Leave empty to fetch all orders"
               />
             </div>
 
