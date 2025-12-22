@@ -63,6 +63,17 @@ export default function Processed() {
     const totalAmount = orders.reduce((sum, o) => sum + (parseFloat(o.payment?.total_amount) || 0), 0);
     const currency = orders[0]?.payment?.currency || 'MYR';
 
+    // Check how many orders have complete details (not masked)
+    const ordersWithDetails = orders.filter(o => {
+      const name = o.recipient_address?.name || '';
+      const phone = o.recipient_address?.phone_number || '';
+      const address = o.recipient_address?.full_address || '';
+      return !name.includes('***') && !phone.includes('***') && !address.includes('***') &&
+             name !== '' && phone !== '' && address !== '';
+    });
+
+    const ordersNeedingDetails = orders.length - ordersWithDetails.length;
+
     return {
       totalOrders: orders.length,
       totalCustomers: uniqueCustomers.size,
@@ -70,7 +81,9 @@ export default function Processed() {
       inTransit: orders.filter(o => o.status === 'IN_TRANSIT').length,
       delivered: orders.filter(o => ['DELIVERED', 'COMPLETED'].includes(o.status)).length,
       totalPrice: totalAmount,
-      currency
+      currency,
+      ordersWithDetails: ordersWithDetails.length,
+      ordersNeedingDetails
     };
   }, [orders]);
 
@@ -380,6 +393,67 @@ export default function Processed() {
     }
   };
 
+  // Parse and update customer details from textarea
+  const handleUpdateDetails = async (order, detailsText) => {
+    if (!detailsText || detailsText.trim() === '') return;
+
+    try {
+      // Parse the pasted text (format: name\nphone\naddress\nzip)
+      const lines = detailsText.trim().split('\n').map(line => line.trim());
+
+      if (lines.length < 3) {
+        console.warn('Insufficient data in pasted text');
+        return;
+      }
+
+      const name = lines[0] || '';
+      const phone = lines[1] || '';
+
+      // Combine remaining lines as address (handle multi-line addresses)
+      const addressParts = lines.slice(2);
+      const fullAddress = addressParts.join(', ');
+
+      // Extract zip code from address (last 5 digits)
+      const zipMatch = fullAddress.match(/\b\d{5}\b/);
+      const zipCode = zipMatch ? zipMatch[0] : '';
+
+      console.log('Parsed customer details:', { name, phone, fullAddress, zipCode });
+
+      // Update order in state
+      const updatedOrder = {
+        ...order,
+        recipient_address: {
+          ...order.recipient_address,
+          name,
+          phone_number: phone,
+          full_address: fullAddress
+        },
+        manual_details: detailsText
+      };
+
+      setAllOrders(prev => prev.map(o =>
+        o.id === updatedOrder.id ? updatedOrder : o
+      ));
+
+      // Save to database
+      await saveOrder({
+        order_id: updatedOrder.id,
+        order_status: updatedOrder.status,
+        customer_name: name,
+        customer_phone: phone,
+        customer_address: fullAddress,
+        total_amount: updatedOrder.payment?.total_amount,
+        currency: updatedOrder.payment?.currency,
+        created_at: new Date(updatedOrder.create_time * 1000).toISOString(),
+        updated_at: new Date(updatedOrder.update_time * 1000).toISOString()
+      }, updatedOrder);
+
+      console.log('✅ Customer details updated and saved to database');
+    } catch (error) {
+      console.error('Failed to update customer details:', error);
+    }
+  };
+
   const handleFetchOrders = async (filters = {}) => {
     if (!credentials) return;
 
@@ -681,7 +755,7 @@ export default function Processed() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <StatsCard
           title="Total Shipped"
           value={stats.totalOrders}
@@ -689,6 +763,26 @@ export default function Processed() {
           icon={
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+          }
+        />
+        <StatsCard
+          title="Got Details"
+          value={stats.ordersWithDetails}
+          color="green"
+          icon={
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          }
+        />
+        <StatsCard
+          title="Remaining Details"
+          value={stats.ordersNeedingDetails}
+          color="red"
+          icon={
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
           }
         />
@@ -767,8 +861,7 @@ export default function Processed() {
         onSelectOrder={handleSelectOrder}
         onSelectAll={handleSelectAll}
         onViewDetails={handleViewDetails}
-        onRefreshOrder={handleRefreshOrder}
-        refreshingOrderId={refreshingOrderId}
+        onUpdateDetails={handleUpdateDetails}
       />
 
       {/* Order Detail Modal */}

@@ -20,7 +20,7 @@ const statusLabels = {
   'CANCELLED': 'Cancelled'
 };
 
-export default function OrderTable({ orders, selectedOrders, onSelectOrder, onSelectAll, onShipOrder, onViewDetails, onRefreshOrder, refreshingOrderId }) {
+export default function OrderTable({ orders, selectedOrders, onSelectOrder, onSelectAll, onShipOrder, onViewDetails, onUpdateDetails }) {
   const allSelected = orders.length > 0 && selectedOrders.length === orders.length;
   const someSelected = selectedOrders.length > 0 && selectedOrders.length < orders.length;
 
@@ -65,6 +65,7 @@ export default function OrderTable({ orders, selectedOrders, onSelectOrder, onSe
               <th className="h-12 px-4 text-left align-middle font-medium text-gray-600">Customer</th>
               <th className="h-12 px-4 text-left align-middle font-medium text-gray-600">Phone</th>
               <th className="h-12 px-4 text-left align-middle font-medium text-gray-600">Address</th>
+              <th className="h-12 px-4 text-left align-middle font-medium text-gray-600">Update Details</th>
               <th className="h-12 px-4 text-left align-middle font-medium text-gray-600">Amount</th>
               <th className="h-12 px-4 text-left align-middle font-medium text-gray-600">Status</th>
               <th className="h-12 px-4 text-left align-middle font-medium text-gray-600">Date</th>
@@ -74,7 +75,7 @@ export default function OrderTable({ orders, selectedOrders, onSelectOrder, onSe
           <tbody>
             {orders.length === 0 ? (
               <tr>
-                <td colSpan="10" className="px-4 py-12 text-center text-gray-500">
+                <td colSpan="11" className="px-4 py-12 text-center text-gray-500">
                   <div className="flex flex-col items-center gap-3">
                     <svg className="w-16 h-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
@@ -128,6 +129,14 @@ export default function OrderTable({ orders, selectedOrders, onSelectOrder, onSe
                       </span>
                     </td>
                     <td className="p-4 align-middle">
+                      <textarea
+                        className="w-48 h-20 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                        placeholder="Paste customer details here..."
+                        defaultValue={order.manual_details || ''}
+                        onBlur={(e) => onUpdateDetails && onUpdateDetails(order, e.target.value)}
+                      />
+                    </td>
+                    <td className="p-4 align-middle">
                       <span className="font-bold text-gray-900">
                         {formatPrice(order.payment?.total_amount, order.payment?.currency)}
                       </span>
@@ -165,25 +174,6 @@ export default function OrderTable({ orders, selectedOrders, onSelectOrder, onSe
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                           </svg>
                         </a>
-                        {onRefreshOrder && (
-                          <button
-                            onClick={() => onRefreshOrder(order)}
-                            disabled={refreshingOrderId === order.id}
-                            className="p-1.5 text-orange-600 hover:bg-orange-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Refresh order details to check if unmasked"
-                          >
-                            {refreshingOrderId === order.id ? (
-                              <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                              </svg>
-                            ) : (
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                              </svg>
-                            )}
-                          </button>
-                        )}
                         {order.status === 'AWAITING_SHIPMENT' && (
                           <button
                             onClick={() => onShipOrder(order)}
