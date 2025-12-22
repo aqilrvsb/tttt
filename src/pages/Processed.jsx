@@ -98,7 +98,7 @@ export default function Processed() {
     loadCredentials();
   }, []);
 
-  // Load orders from Supabase on mount
+  // Load orders from Supabase on mount and auto-refresh if masked
   useEffect(() => {
     const loadOrdersFromDB = async () => {
       try {
@@ -115,6 +115,34 @@ export default function Processed() {
 
         if (convertedOrders.length > 0) {
           setAllOrders(convertedOrders);
+
+          // Check if any shipped orders (NOT COMPLETED) have masked data
+          const shippedNotCompleted = convertedOrders.filter(o =>
+            ['AWAITING_COLLECTION', 'IN_TRANSIT', 'DELIVERED'].includes(o.status)
+          );
+
+          const hasMaskedData = shippedNotCompleted.some(order => {
+            const name = order.recipient_address?.name || '';
+            const phone = order.recipient_address?.phone_number || '';
+            const address = order.recipient_address?.full_address || '';
+            return name.includes('***') || name.includes('**') ||
+                   phone.includes('***') || phone.includes('*****') ||
+                   address.includes('***') || address.includes('**');
+          });
+
+          // If we have credentials and masked data detected, auto-fetch to refresh
+          if (hasMaskedData && credentials) {
+            console.log('Detected masked customer data in shipped orders (not completed), auto-fetching from API...');
+
+            // Fetch last 90 days to refresh all shipped orders
+            const now = new Date();
+            const ninetyDaysAgo = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
+
+            handleFetchOrders({
+              create_time_ge: Math.floor(ninetyDaysAgo.getTime() / 1000),
+              create_time_lt: Math.floor(now.getTime() / 1000)
+            });
+          }
         }
 
         // Auto-set filter to current month (start of month to today)
@@ -131,8 +159,11 @@ export default function Processed() {
       }
     };
 
-    loadOrdersFromDB();
-  }, []);
+    // Only run when we have credentials loaded
+    if (credentials) {
+      loadOrdersFromDB();
+    }
+  }, [credentials]);
 
   const handleFetchOrders = async (filters = {}) => {
     if (!credentials) return;
