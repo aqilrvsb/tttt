@@ -244,18 +244,6 @@ export default function Orders() {
       return;
     }
 
-    // Check if orders have been shipped
-    const unshippedOrders = ordersToDownload.filter(o =>
-      !o.packages || o.packages.length === 0 ||
-      o.status === 'AWAITING_SHIPMENT' ||
-      o.status === 'UNPAID'
-    );
-
-    if (unshippedOrders.length > 0) {
-      alert(`Cannot print waybills for unshipped orders!\n\n${unshippedOrders.length} of ${ordersToDownload.length} selected orders haven't been shipped yet.\n\nPlease:\n1. Ship the orders first using "Ship Selected" button\n2. Then print waybills for shipped orders only\n\nNote: Only orders with status "In Transit", "Delivered", or "Completed" can have waybills printed.`);
-      return;
-    }
-
     setPrintLoading(true);
 
     try {
@@ -320,18 +308,6 @@ export default function Orders() {
 
     if (ordersToDownload.length === 0) {
       alert('Please select orders to download waybills');
-      return;
-    }
-
-    // Check if orders have been shipped
-    const unshippedOrders = ordersToDownload.filter(o =>
-      !o.packages || o.packages.length === 0 ||
-      o.status === 'AWAITING_SHIPMENT' ||
-      o.status === 'UNPAID'
-    );
-
-    if (unshippedOrders.length > 0) {
-      alert(`Cannot download waybills for unshipped orders!\n\n${unshippedOrders.length} of ${ordersToDownload.length} selected orders haven't been shipped yet.\n\nPlease ship the orders first, then download waybills.`);
       return;
     }
 
