@@ -30,8 +30,13 @@ export default function FilterBar({ onFetch, onFilterChange, loading, statusOpti
     if (fetchDate) {
       fetchParams.create_time_ge = Math.floor(new Date(fetchDate).getTime() / 1000);
       fetchParams.create_time_lt = Math.floor(new Date(fetchDate).getTime() / 1000) + 86400;
+    } else {
+      // If no date selected, fetch last 90 days (TikTok API max range)
+      const now = new Date();
+      const ninetyDaysAgo = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
+      fetchParams.create_time_ge = Math.floor(ninetyDaysAgo.getTime() / 1000);
+      fetchParams.create_time_lt = Math.floor(now.getTime() / 1000);
     }
-    // If no date selected, fetch all orders (TikTok API will use default range)
 
     onFetch(fetchParams);
   };
@@ -45,7 +50,7 @@ export default function FilterBar({ onFetch, onFilterChange, loading, statusOpti
           <div className="flex flex-wrap items-end gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Fetch Date <span className="text-gray-500 font-normal">(optional - leave empty for all)</span>
+                Fetch Date <span className="text-gray-500 font-normal">(optional - leave empty for last 90 days)</span>
               </label>
               <input
                 type="date"
