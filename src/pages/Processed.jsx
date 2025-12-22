@@ -1,19 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Swal from 'sweetalert2';
 import StatsCard from '../components/StatsCard';
-import FilterBar from '../components/FilterBar';
 import BulkActions from '../components/BulkActions';
 import OrderTable from '../components/OrderTable';
 import OrderDetailModal from '../components/OrderDetailModal';
-import { searchOrders, getOrderDetails, getShippingDocument } from '../lib/tiktokApi';
-import { saveOrder, mergeWaybills, getAllOrdersFromDB } from '../lib/supabase';
+import { getAllOrdersFromDB } from '../lib/supabase';
 
 export default function Processed() {
   const navigate = useNavigate();
-
-  // Auth state
-  const [credentials, setCredentials] = useState(null);
 
   // Data state
   const [allOrders, setAllOrders] = useState([]);
@@ -23,11 +17,8 @@ export default function Processed() {
     endDate: '',
     status: ''
   });
-  const [pageToken, setPageToken] = useState(null);
 
   // UI state
-  const [loading, setLoading] = useState(false);
-  const [printLoading, setPrintLoading] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedOrderForDetail, setSelectedOrderForDetail] = useState(null);
 
@@ -73,23 +64,6 @@ export default function Processed() {
     };
   }, [orders]);
 
-  // Check for credentials on mount - redirect to settings if not found
-  useEffect(() => {
-    const saved = localStorage.getItem('tiktok_credentials');
-    if (!saved) {
-      navigate('/settings');
-      return;
-    }
-
-    try {
-      const parsed = JSON.parse(saved);
-      setCredentials(parsed);
-    } catch (e) {
-      localStorage.removeItem('tiktok_credentials');
-      navigate('/settings');
-    }
-  }, [navigate]);
-
   // Load orders from Supabase on mount
   useEffect(() => {
     const loadOrdersFromDB = async () => {
@@ -108,6 +82,16 @@ export default function Processed() {
         if (convertedOrders.length > 0) {
           setAllOrders(convertedOrders);
         }
+
+        // Auto-set filter to current month (start of month to today)
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        setClientFilters({
+          startDate: startOfMonth.toISOString().split('T')[0],
+          endDate: now.toISOString().split('T')[0],
+          status: ''
+        });
       } catch (error) {
         console.error('Failed to load orders from database:', error);
       }
@@ -148,7 +132,54 @@ export default function Processed() {
         const orderIds = data.orders.map(o => o.id);
         const details = await getOrderDetails(credentials, orderIds);
 
-        const fetchedOrders = details.orders || data.orders;
+        let fetchedOrders = details.orders || data.orders;
+
+        // Check if customer data is masked (contains ***)
+        const hasMaskedData = fetchedOrders.some(order => {
+          const name = order.recipient_address?.name || '';
+          const phone = order.recipient_address?.phone_number || '';
+          const address = order.recipient_address?.full_address || '';
+          return name.includes('***') || name.includes('**') ||
+                 phone.includes('***') || phone.includes('*****') ||
+                 address.includes('***') || address.includes('**');
+        });
+
+        // If data is masked, get original data from database
+        if (hasMaskedData) {
+          console.log('Detected masked customer data, fetching from database...');
+
+          // Get fresh data from database
+          const dbOrders = await getAllOrdersFromDB();
+
+          // Create map of DB orders by order_id
+          const dbOrdersMap = new Map(
+            dbOrders
+              .filter(o => o.order_data)
+              .map(o => [o.order_data.id, o.order_data])
+          );
+
+          // Replace masked data with database data
+          fetchedOrders = fetchedOrders.map(fetchedOrder => {
+            const dbOrder = dbOrdersMap.get(fetchedOrder.id);
+
+            // If we have this order in DB with unmasked customer data, use it
+            if (dbOrder && dbOrder.recipient_address) {
+              const dbName = dbOrder.recipient_address.name || '';
+              const fetchedName = fetchedOrder.recipient_address?.name || '';
+
+              // If DB data is not masked but fetched is masked, preserve DB customer data
+              if (!dbName.includes('***') && fetchedName.includes('***')) {
+                console.log(`Preserving customer data for order ${fetchedOrder.id.slice(-8)}`);
+                return {
+                  ...fetchedOrder,
+                  recipient_address: dbOrder.recipient_address // Preserve customer data
+                };
+              }
+            }
+
+            return fetchedOrder;
+          });
+        }
 
         // Create map of existing orders by ID for quick lookup
         const existingOrdersMap = new Map(allOrders.map(o => [o.id, o]));
@@ -423,27 +454,64 @@ export default function Processed() {
         />
       </div>
 
-      {/* Filters */}
-      <FilterBar
-        onFetch={handleFetchOrders}
-        onFilterChange={setClientFilters}
-        loading={loading}
-        statusOptions={[
-          { value: 'AWAITING_COLLECTION', label: 'Awaiting Collection' },
-          { value: 'IN_TRANSIT', label: 'In Transit' },
-          { value: 'DELIVERED', label: 'Delivered' },
-          { value: 'COMPLETED', label: 'Completed' }
-        ]}
-      />
+      {/* Filters - Only client-side filtering, no fetch */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">Filter Displayed Orders</h3>
+        <div className="flex flex-wrap items-end gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Start Date
+            </label>
+            <input
+              type="date"
+              name="startDate"
+              value={clientFilters.startDate}
+              onChange={(e) => setClientFilters({ ...clientFilters, startDate: e.target.value })}
+              className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            />
+          </div>
 
-      {/* Bulk Actions - No ship button for processed orders */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              End Date
+            </label>
+            <input
+              type="date"
+              name="endDate"
+              value={clientFilters.endDate}
+              onChange={(e) => setClientFilters({ ...clientFilters, endDate: e.target.value })}
+              className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Status
+            </label>
+            <select
+              name="status"
+              value={clientFilters.status}
+              onChange={(e) => setClientFilters({ ...clientFilters, status: e.target.value })}
+              className="w-auto min-w-[180px] px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            >
+              <option value="">All Status</option>
+              <option value="AWAITING_COLLECTION">Awaiting Collection</option>
+              <option value="IN_TRANSIT">In Transit</option>
+              <option value="DELIVERED">Delivered</option>
+              <option value="COMPLETED">Completed</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Bulk Actions - No buttons for shipped orders */}
       <BulkActions
         selectedCount={selectedOrders.length}
         onShipSelected={null}
-        onPrintWaybills={handleBulkPrintWaybills}
-        onDownloadWaybills={handleDownloadWaybills}
+        onPrintWaybills={null}
+        onDownloadWaybills={null}
         loading={false}
-        printLoading={printLoading}
+        printLoading={false}
         activeTab="processed"
       />
 

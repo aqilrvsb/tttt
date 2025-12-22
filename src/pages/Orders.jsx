@@ -6,7 +6,7 @@ import FilterBar from '../components/FilterBar';
 import BulkActions from '../components/BulkActions';
 import OrderTable from '../components/OrderTable';
 import OrderDetailModal from '../components/OrderDetailModal';
-import { searchOrders, getOrderDetails, getShippingDocument } from '../lib/tiktokApi';
+import { searchOrders, getOrderDetails, getShippingDocument, shipPackage } from '../lib/tiktokApi';
 import { saveOrder, mergeWaybills, getAllOrdersFromDB } from '../lib/supabase';
 
 export default function Orders() {
@@ -108,6 +108,16 @@ export default function Orders() {
         if (convertedOrders.length > 0) {
           setAllOrders(convertedOrders);
         }
+
+        // Auto-set filter to current month (start of month to today)
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        setClientFilters({
+          startDate: startOfMonth.toISOString().split('T')[0],
+          endDate: now.toISOString().split('T')[0],
+          status: ''
+        });
       } catch (error) {
         console.error('Failed to load orders from database:', error);
       }
@@ -148,7 +158,54 @@ export default function Orders() {
         const orderIds = data.orders.map(o => o.id);
         const details = await getOrderDetails(credentials, orderIds);
 
-        const fetchedOrders = details.orders || data.orders;
+        let fetchedOrders = details.orders || data.orders;
+
+        // Check if customer data is masked (contains ***)
+        const hasMaskedData = fetchedOrders.some(order => {
+          const name = order.recipient_address?.name || '';
+          const phone = order.recipient_address?.phone_number || '';
+          const address = order.recipient_address?.full_address || '';
+          return name.includes('***') || name.includes('**') ||
+                 phone.includes('***') || phone.includes('*****') ||
+                 address.includes('***') || address.includes('**');
+        });
+
+        // If data is masked, get original data from database
+        if (hasMaskedData) {
+          console.log('Detected masked customer data, fetching from database...');
+
+          // Get fresh data from database
+          const dbOrders = await getAllOrdersFromDB();
+
+          // Create map of DB orders by order_id
+          const dbOrdersMap = new Map(
+            dbOrders
+              .filter(o => o.order_data)
+              .map(o => [o.order_data.id, o.order_data])
+          );
+
+          // Replace masked data with database data
+          fetchedOrders = fetchedOrders.map(fetchedOrder => {
+            const dbOrder = dbOrdersMap.get(fetchedOrder.id);
+
+            // If we have this order in DB with unmasked customer data, use it
+            if (dbOrder && dbOrder.recipient_address) {
+              const dbName = dbOrder.recipient_address.name || '';
+              const fetchedName = fetchedOrder.recipient_address?.name || '';
+
+              // If DB data is not masked but fetched is masked, preserve DB customer data
+              if (!dbName.includes('***') && fetchedName.includes('***')) {
+                console.log(`Preserving customer data for order ${fetchedOrder.id.slice(-8)}`);
+                return {
+                  ...fetchedOrder,
+                  recipient_address: dbOrder.recipient_address // Preserve customer data
+                };
+              }
+            }
+
+            return fetchedOrder;
+          });
+        }
 
         // Create map of existing orders by ID for quick lookup
         const existingOrdersMap = new Map(allOrders.map(o => [o.id, o]));
@@ -266,66 +323,215 @@ export default function Orders() {
   };
 
 
-  // Bulk print waybills - fetch all and merge into single PDF
+  // Bulk print waybills - auto ship orders and get waybills
   const handleBulkPrintWaybills = async () => {
-    const ordersToDownload = orders.filter(o => selectedOrders.includes(o.id));
+    const ordersToProcess = orders.filter(o => selectedOrders.includes(o.id));
 
-    if (ordersToDownload.length === 0) {
-      alert('Please select orders to print waybills');
+    if (ordersToProcess.length === 0) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'No Orders Selected',
+        text: 'Please select orders to print waybills'
+      });
       return;
     }
 
     setPrintLoading(true);
 
+    // Show progress modal
+    Swal.fire({
+      title: 'Processing Orders',
+      html: `<div>
+        <p>Arranging shipping and generating waybills...</p>
+        <p class="text-sm text-gray-500 mt-2">0 of ${ordersToProcess.length} processed</p>
+      </div>`,
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+
     try {
-      // Collect all waybill URLs
       const waybillUrls = [];
+      const shippedOrders = [];
+      const errors = [];
+      let processedCount = 0;
 
-      for (const order of ordersToDownload) {
-        // First, check if we have a saved waybill URL from database
-        if (order.saved_waybill_url) {
-          waybillUrls.push(order.saved_waybill_url);
-          continue;
-        }
+      for (const order of ordersToProcess) {
+        processedCount++;
 
-        // If not saved, try to fetch from TikTok API
-        const packageId = order.packages?.[0]?.id;
-        if (packageId) {
+        // Update progress
+        Swal.update({
+          html: `<div>
+            <p>Arranging shipping and generating waybills...</p>
+            <p class="text-sm text-gray-500 mt-2">${processedCount} of ${ordersToProcess.length} processed</p>
+            <p class="text-xs text-gray-400 mt-1">Order ${order.id.slice(-8)}</p>
+          </div>`
+        });
+
+        try {
+          // Check if we have a saved waybill URL
+          if (order.saved_waybill_url) {
+            waybillUrls.push(order.saved_waybill_url);
+            console.log(`Using saved waybill for order ${order.id.slice(-8)}`);
+            continue;
+          }
+
+          const packageId = order.packages?.[0]?.id;
+          if (!packageId) {
+            errors.push(`Order ${order.id.slice(-8)}: No package ID`);
+            continue;
+          }
+
+          // Try to get waybill first (might already be shipped)
           try {
             const doc = await getShippingDocument(credentials, packageId, 'SHIPPING_LABEL');
             if (doc.doc_url) {
               waybillUrls.push(doc.doc_url);
+
+              // Save waybill URL to database
+              await saveOrder({
+                order_id: order.id,
+                order_status: order.status,
+                waybill_url: doc.doc_url,
+                customer_name: order.recipient_address?.name,
+                customer_phone: order.recipient_address?.phone_number,
+                customer_address: order.recipient_address?.full_address,
+                total_amount: order.payment?.total_amount,
+                currency: order.payment?.currency,
+                created_at: new Date(order.create_time * 1000).toISOString(),
+                updated_at: new Date(order.update_time * 1000).toISOString()
+              }, order);
+
+              continue;
             }
-          } catch (e) {
-            console.warn(`Failed to get waybill for order ${order.id}:`, e.message);
+          } catch (waybillError) {
+            // If waybill doesn't exist, ship the order first
+            if (waybillError.message.includes('before shipped') || waybillError.message.includes('21042104')) {
+              console.log(`Shipping order ${order.id.slice(-8)} first...`);
+
+              // Ship the package
+              await shipPackage(credentials, packageId, 'PICKUP');
+              shippedOrders.push(order.id);
+
+              // Wait a moment for TikTok to generate waybill
+              await new Promise(resolve => setTimeout(resolve, 1000));
+
+              // Now get the waybill
+              const doc = await getShippingDocument(credentials, packageId, 'SHIPPING_LABEL');
+              if (doc.doc_url) {
+                waybillUrls.push(doc.doc_url);
+
+                // Save waybill URL to database
+                await saveOrder({
+                  order_id: order.id,
+                  order_status: 'AWAITING_COLLECTION',
+                  waybill_url: doc.doc_url,
+                  customer_name: order.recipient_address?.name,
+                  customer_phone: order.recipient_address?.phone_number,
+                  customer_address: order.recipient_address?.full_address,
+                  total_amount: order.payment?.total_amount,
+                  currency: order.payment?.currency,
+                  created_at: new Date(order.create_time * 1000).toISOString(),
+                  updated_at: new Date().toISOString()
+                }, order);
+              }
+            } else {
+              throw waybillError;
+            }
           }
+        } catch (orderError) {
+          console.error(`Error processing order ${order.id}:`, orderError);
+          errors.push(`Order ${order.id.slice(-8)}: ${orderError.message}`);
         }
       }
 
-      // If only one waybill, open directly
-      if (waybillUrls.length === 1) {
-        window.open(waybillUrls[0], '_blank');
+      // Close progress modal
+      Swal.close();
+
+      // Show results
+      if (waybillUrls.length === 0) {
+        Swal.fire({
+          icon: 'error',
+          title: 'No Waybills Generated',
+          html: `<div class="text-left">
+            <p class="mb-2">Could not generate any waybills.</p>
+            ${errors.length > 0 ? `<p class="text-sm text-gray-600">Errors:</p><ul class="text-xs text-red-600 list-disc list-inside">${errors.map(e => `<li>${e}</li>`).join('')}</ul>` : ''}
+          </div>`
+        });
         setPrintLoading(false);
         return;
       }
 
-      // Merge multiple waybills using Supabase edge function
-      if (waybillUrls.length > 1) {
+      // Show success message
+      if (shippedOrders.length > 0) {
+        await Swal.fire({
+          icon: 'success',
+          title: 'Orders Shipped!',
+          html: `<div>
+            <p><strong>${shippedOrders.length}</strong> orders arranged for shipping</p>
+            <p><strong>${waybillUrls.length}</strong> waybills generated</p>
+            ${errors.length > 0 ? `<p class="text-sm text-orange-600 mt-2">${errors.length} orders had errors</p>` : ''}
+          </div>`,
+          timer: 3000,
+          showConfirmButton: false
+        });
+      }
+
+      // Refresh orders to update status
+      if (shippedOrders.length > 0) {
+        setAllOrders(prev => prev.map(o =>
+          shippedOrders.includes(o.id)
+            ? { ...o, status: 'AWAITING_COLLECTION' }
+            : o
+        ));
+      }
+
+      // Open or merge waybills
+      if (waybillUrls.length === 1) {
+        window.open(waybillUrls[0], '_blank');
+      } else if (waybillUrls.length > 1) {
         const mergedPdfBlob = await mergeWaybills(waybillUrls);
 
         if (mergedPdfBlob) {
-          // Create object URL and open in new tab
           const url = URL.createObjectURL(mergedPdfBlob);
           window.open(url, '_blank');
         } else {
           // Fallback: open all waybills in separate tabs
-          alert(`Could not merge PDFs. Opening ${waybillUrls.length} waybills in separate tabs.`);
+          Swal.fire({
+            icon: 'info',
+            title: 'Opening Waybills',
+            text: `Could not merge PDFs. Opening ${waybillUrls.length} waybills in separate tabs.`,
+            timer: 2000
+          });
           waybillUrls.forEach(url => window.open(url, '_blank'));
         }
       }
+
+      // Show errors if any
+      if (errors.length > 0 && waybillUrls.length > 0) {
+        setTimeout(() => {
+          Swal.fire({
+            icon: 'warning',
+            title: 'Some Orders Had Errors',
+            html: `<div class="text-left">
+              <p class="mb-2">${errors.length} orders could not be processed:</p>
+              <ul class="text-xs text-red-600 list-disc list-inside max-h-40 overflow-y-auto">
+                ${errors.map(e => `<li>${e}</li>`).join('')}
+              </ul>
+            </div>`
+          });
+        }, 3500);
+      }
+
     } catch (error) {
       console.error('Failed to print waybills:', error);
-      alert('Failed to print waybills: ' + error.message);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error!',
+        text: 'Failed to print waybills: ' + error.message
+      });
     } finally {
       setPrintLoading(false);
     }
@@ -442,6 +648,7 @@ export default function Orders() {
         onFetch={handleFetchOrders}
         onFilterChange={setClientFilters}
         loading={loading}
+        initialFilters={clientFilters}
         statusOptions={[
           { value: 'UNPAID', label: 'Unpaid' },
           { value: 'AWAITING_SHIPMENT', label: 'Awaiting Shipment' }

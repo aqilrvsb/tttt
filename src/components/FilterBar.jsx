@@ -1,12 +1,23 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
-export default function FilterBar({ onFetch, onFilterChange, loading, statusOptions = [] }) {
+export default function FilterBar({ onFetch, onFilterChange, loading, statusOptions = [], initialFilters = {} }) {
   const [fetchDate, setFetchDate] = useState('');
   const [filters, setFilters] = useState({
-    startDate: '',
-    endDate: '',
-    status: ''
+    startDate: initialFilters.startDate || '',
+    endDate: initialFilters.endDate || '',
+    status: initialFilters.status || ''
   });
+
+  // Sync with parent's filter state
+  useEffect(() => {
+    if (initialFilters.startDate || initialFilters.endDate || initialFilters.status) {
+      setFilters({
+        startDate: initialFilters.startDate || '',
+        endDate: initialFilters.endDate || '',
+        status: initialFilters.status || ''
+      });
+    }
+  }, [initialFilters.startDate, initialFilters.endDate, initialFilters.status]);
 
   const handleFilterChange = (e) => {
     const newFilters = {
