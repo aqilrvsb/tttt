@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Swal from 'sweetalert2';
 import StatsCard from '../components/StatsCard';
 import FilterBar from '../components/FilterBar';
 import BulkActions from '../components/BulkActions';
@@ -17,7 +18,11 @@ export default function Processed() {
   // Data state
   const [allOrders, setAllOrders] = useState([]);
   const [selectedOrders, setSelectedOrders] = useState([]);
-  const [currentFilters, setCurrentFilters] = useState({});
+  const [clientFilters, setClientFilters] = useState({
+    startDate: '',
+    endDate: '',
+    status: ''
+  });
   const [pageToken, setPageToken] = useState(null);
 
   // UI state
@@ -26,12 +31,30 @@ export default function Processed() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedOrderForDetail, setSelectedOrderForDetail] = useState(null);
 
-  // Filter orders - only processed orders (IN_TRANSIT, AWAITING_COLLECTION, DELIVERED, COMPLETED)
+  // Filter orders - only processed orders + apply client-side filters
   const orders = useMemo(() => {
-    return allOrders.filter(o =>
+    let filtered = allOrders.filter(o =>
       ['IN_TRANSIT', 'AWAITING_COLLECTION', 'DELIVERED', 'COMPLETED'].includes(o.status)
     );
-  }, [allOrders]);
+
+    // Apply client-side date filters
+    if (clientFilters.startDate) {
+      const startTime = new Date(clientFilters.startDate).getTime() / 1000;
+      filtered = filtered.filter(o => o.create_time >= startTime);
+    }
+
+    if (clientFilters.endDate) {
+      const endTime = (new Date(clientFilters.endDate).getTime() / 1000) + 86400; // End of day
+      filtered = filtered.filter(o => o.create_time < endTime);
+    }
+
+    // Apply client-side status filter
+    if (clientFilters.status) {
+      filtered = filtered.filter(o => o.status === clientFilters.status);
+    }
+
+    return filtered;
+  }, [allOrders, clientFilters]);
 
   // Stats for processed orders
   const stats = useMemo(() => {
@@ -74,9 +97,13 @@ export default function Processed() {
         const dbOrders = await getAllOrdersFromDB();
 
         // Convert DB orders back to TikTok order format
+        // Merge waybill_url from DB into order data
         const convertedOrders = dbOrders
           .filter(dbOrder => dbOrder.order_data) // Only orders with full data
-          .map(dbOrder => dbOrder.order_data);
+          .map(dbOrder => ({
+            ...dbOrder.order_data,
+            saved_waybill_url: dbOrder.waybill_url // Add saved waybill URL
+          }));
 
         if (convertedOrders.length > 0) {
           setAllOrders(convertedOrders);
@@ -93,7 +120,17 @@ export default function Processed() {
     if (!credentials) return;
 
     setLoading(true);
-    setCurrentFilters(filters);
+
+    // Show Swal loading
+    Swal.fire({
+      title: 'Fetching Orders',
+      html: 'Please wait while we fetch orders from TikTok API...',
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
 
     try {
       const data = await searchOrders(credentials, {
@@ -102,6 +139,11 @@ export default function Processed() {
       });
 
       if (data.orders && data.orders.length > 0) {
+        // Update Swal: Getting details
+        Swal.update({
+          html: `Fetching details for ${data.orders.length} orders...`
+        });
+
         // Get full order details
         const orderIds = data.orders.map(o => o.id);
         const details = await getOrderDetails(credentials, orderIds);
@@ -141,19 +183,41 @@ export default function Processed() {
         if (newOrders.length > 0) {
           console.log(`Added ${newOrders.length} new orders. Skipped ${fetchedOrders.length - newOrders.length} duplicates.`);
         }
+
+        // Show success
+        Swal.fire({
+          icon: 'success',
+          title: 'Success!',
+          html: `<div>
+            <p><strong>${fetchedOrders.length}</strong> orders fetched</p>
+            <p><strong>${newOrders.length}</strong> new orders added</p>
+            <p><strong>${fetchedOrders.length - newOrders.length}</strong> duplicates skipped</p>
+          </div>`,
+          timer: 3000,
+          showConfirmButton: false
+        });
+      } else {
+        // No orders found
+        Swal.fire({
+          icon: 'info',
+          title: 'No Orders Found',
+          text: 'No orders found for the selected date',
+          timer: 2000,
+          showConfirmButton: false
+        });
       }
 
       setSelectedOrders([]);
     } catch (error) {
       console.error('Failed to fetch orders:', error);
-      alert('Failed to fetch orders: ' + error.message);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error!',
+        text: 'Failed to fetch orders: ' + error.message
+      });
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleRefresh = () => {
-    handleFetchOrders(currentFilters);
   };
 
   const handleSelectOrder = (orderId) => {
@@ -334,8 +398,8 @@ export default function Processed() {
 
       {/* Filters */}
       <FilterBar
-        onFilter={handleFetchOrders}
-        onRefresh={handleRefresh}
+        onFetch={handleFetchOrders}
+        onFilterChange={setClientFilters}
         loading={loading}
       />
 
