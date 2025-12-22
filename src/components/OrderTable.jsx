@@ -92,6 +92,12 @@ export default function OrderTable({ orders, selectedOrders, onSelectOrder, onSe
                 const isSelected = selectedOrders.includes(order.id);
                 const customer = order.recipient_address || {};
 
+                // Check if order has complete details (not masked)
+                const hasCompleteDetails = customer.name && customer.phone_number && customer.full_address &&
+                  !customer.name.includes('***') &&
+                  !customer.phone_number.includes('***') &&
+                  !customer.full_address.includes('***');
+
                 return (
                   <tr
                     key={order.id}
@@ -123,19 +129,21 @@ export default function OrderTable({ orders, selectedOrders, onSelectOrder, onSe
                         {customer.phone_number || '-'}
                       </span>
                     </td>
-                    <td className="p-4 align-middle max-w-xs">
-                      <span className="text-gray-700 truncate block" title={customer.full_address}>
+                    <td className="p-4 align-middle">
+                      <span className="text-gray-700 whitespace-normal break-words">
                         {customer.full_address || '-'}
                       </span>
                     </td>
-                    <td className="p-4 align-middle">
-                      <textarea
-                        className="w-48 h-20 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
-                        placeholder="Paste customer details here..."
-                        defaultValue={order.manual_details || ''}
-                        onBlur={(e) => onUpdateDetails && onUpdateDetails(order, e.target.value)}
-                      />
-                    </td>
+                    {!hasCompleteDetails && (
+                      <td className="p-4 align-middle">
+                        <textarea
+                          className="w-48 h-20 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                          placeholder="Paste customer details here..."
+                          defaultValue={order.manual_details || ''}
+                          onBlur={(e) => onUpdateDetails && onUpdateDetails(order, e.target.value)}
+                        />
+                      </td>
+                    )}
                     <td className="p-4 align-middle">
                       <span className="font-bold text-gray-900">
                         {formatPrice(order.payment?.total_amount, order.payment?.currency)}
