@@ -121,7 +121,7 @@ export default function Processed() {
             ['AWAITING_COLLECTION', 'IN_TRANSIT', 'DELIVERED'].includes(o.status)
           );
 
-          const hasMaskedData = shippedNotCompleted.some(order => {
+          const maskedOrders = shippedNotCompleted.filter(order => {
             const name = order.recipient_address?.name || '';
             const phone = order.recipient_address?.phone_number || '';
             const address = order.recipient_address?.full_address || '';
@@ -130,18 +130,10 @@ export default function Processed() {
                    address.includes('***') || address.includes('**');
           });
 
-          // If we have credentials and masked data detected, auto-fetch to refresh
-          if (hasMaskedData && credentials) {
-            console.log('Detected masked customer data in shipped orders (not completed), auto-fetching from API...');
-
-            // Fetch last 90 days to refresh all shipped orders
-            const now = new Date();
-            const ninetyDaysAgo = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
-
-            handleFetchOrders({
-              create_time_ge: Math.floor(ninetyDaysAgo.getTime() / 1000),
-              create_time_lt: Math.floor(now.getTime() / 1000)
-            });
+          // If we have credentials and masked orders, silently refresh to unmask
+          if (maskedOrders.length > 0 && credentials) {
+            console.log(`Detected ${maskedOrders.length} masked orders in shipped (not completed), silently refreshing from API...`);
+            silentRefreshForUnmasking(maskedOrders);
           }
         }
 
@@ -164,6 +156,74 @@ export default function Processed() {
       loadOrdersFromDB();
     }
   }, [credentials]);
+
+  // Silent refresh to unmask customer data (no UI popup)
+  // This only calls getOrderDetails for specific masked orders, does NOT search for new orders
+  const silentRefreshForUnmasking = async (maskedOrders) => {
+    if (!credentials || !maskedOrders || maskedOrders.length === 0) return;
+
+    try {
+      console.log(`Checking ${maskedOrders.length} orders for unmasked customer data...`);
+
+      // Get order IDs that need unmasking
+      const orderIds = maskedOrders.map(o => o.id);
+
+      // Call getOrderDetails API to get unmasked data
+      const details = await getOrderDetails(credentials, orderIds);
+      const fetchedOrders = details.orders || [];
+
+      if (fetchedOrders.length === 0) {
+        console.log('No orders returned from API');
+        return;
+      }
+
+      // Update local state and database
+      let unmaskedCount = 0;
+
+      for (const fetchedOrder of fetchedOrders) {
+        const originalOrder = maskedOrders.find(o => o.id === fetchedOrder.id);
+
+        if (!originalOrder) continue;
+
+        // Check if the fetched data is now unmasked
+        const fetchedName = fetchedOrder.recipient_address?.name || '';
+        const originalName = originalOrder.recipient_address?.name || '';
+
+        const wasUnmasked = !fetchedName.includes('***') && originalName.includes('***');
+
+        if (wasUnmasked) {
+          unmaskedCount++;
+          console.log(`Unmasked customer data for order ${fetchedOrder.id.slice(-8)}`);
+        }
+
+        // Update in allOrders state
+        setAllOrders(prev => prev.map(o =>
+          o.id === fetchedOrder.id ? { ...fetchedOrder, saved_waybill_url: o.saved_waybill_url } : o
+        ));
+
+        // Save unmasked data to database
+        try {
+          await saveOrder({
+            order_id: fetchedOrder.id,
+            order_status: fetchedOrder.status,
+            customer_name: fetchedOrder.recipient_address?.name,
+            customer_phone: fetchedOrder.recipient_address?.phone_number,
+            customer_address: fetchedOrder.recipient_address?.full_address,
+            total_amount: fetchedOrder.payment?.total_amount,
+            currency: fetchedOrder.payment?.currency,
+            created_at: new Date(fetchedOrder.create_time * 1000).toISOString(),
+            updated_at: new Date(fetchedOrder.update_time * 1000).toISOString()
+          }, fetchedOrder);
+        } catch (e) {
+          console.warn(`Failed to save order ${fetchedOrder.id} to Supabase:`, e);
+        }
+      }
+
+      console.log(`Successfully unmasked ${unmaskedCount} out of ${fetchedOrders.length} orders`);
+    } catch (error) {
+      console.error('Silent refresh failed:', error);
+    }
+  };
 
   const handleFetchOrders = async (filters = {}) => {
     if (!credentials) return;
