@@ -100,6 +100,42 @@ export async function getUserCredentialId() {
   return credentialData.id;
 }
 
+// Get user's credentials (full data)
+export async function getUserCredentials() {
+  // Get current authenticated user
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    throw new Error('User not authenticated');
+  }
+
+  // Get user's ID from users table using auth_user_id
+  const { data: userData, error: userDataError } = await supabase
+    .from('users')
+    .select('id')
+    .eq('auth_user_id', user.id)
+    .single();
+
+  if (userDataError || !userData) {
+    throw new Error('User profile not found. Please contact support.');
+  }
+
+  // Get the first credential for this user
+  const { data: credentialData, error: credentialError } = await supabase
+    .from('credentials')
+    .select('*')
+    .eq('user_id', userData.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (credentialError || !credentialData) {
+    return null;
+  }
+
+  return credentialData;
+}
+
 // Save order to history (with full order data)
 export async function saveOrder(order, fullOrderData = null) {
   // Get user's credential ID if not provided

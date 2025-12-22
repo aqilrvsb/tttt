@@ -7,7 +7,7 @@ import BulkActions from '../components/BulkActions';
 import OrderTable from '../components/OrderTable';
 import OrderDetailModal from '../components/OrderDetailModal';
 import { searchOrders, getOrderDetails } from '../lib/tiktokApi';
-import { saveOrder, getAllOrdersFromDB } from '../lib/supabase';
+import { saveOrder, getAllOrdersFromDB, getUserCredentials } from '../lib/supabase';
 
 export default function Processed() {
   const navigate = useNavigate();
@@ -73,21 +73,32 @@ export default function Processed() {
     };
   }, [orders]);
 
-  // Check authentication on mount
+  // Load credentials from database on mount
   useEffect(() => {
-    const savedCredentials = localStorage.getItem('tiktok_credentials');
-    const savedShopInfo = localStorage.getItem('shop_info');
+    const loadCredentials = async () => {
+      try {
+        const creds = await getUserCredentials();
+        if (creds) {
+          setCredentials({
+            app_key: creds.app_key,
+            app_secret: creds.app_secret,
+            access_token: creds.access_token,
+            shop_cipher: creds.shop_cipher
+          });
+          setShopInfo({
+            shop_id: creds.shop_id,
+            shop_name: creds.shop_name
+          });
+        }
+      } catch (error) {
+        console.error('Failed to load credentials:', error);
+      }
+    };
 
-    if (!savedCredentials || !savedShopInfo) {
-      navigate('/');
-      return;
-    }
+    loadCredentials();
+  }, []);
 
-    setCredentials(JSON.parse(savedCredentials));
-    setShopInfo(JSON.parse(savedShopInfo));
-  }, [navigate]);
-
-  // Load orders from Supabase on mount and auto-fetch if masked
+  // Load orders from Supabase on mount
   useEffect(() => {
     const loadOrdersFromDB = async () => {
       try {
@@ -104,34 +115,6 @@ export default function Processed() {
 
         if (convertedOrders.length > 0) {
           setAllOrders(convertedOrders);
-
-          // Check if any shipped orders (not COMPLETED) have masked data
-          const shippedOrders = convertedOrders.filter(o =>
-            ['AWAITING_COLLECTION', 'IN_TRANSIT', 'DELIVERED'].includes(o.status)
-          );
-
-          const hasMaskedData = shippedOrders.some(order => {
-            const name = order.recipient_address?.name || '';
-            const phone = order.recipient_address?.phone_number || '';
-            const address = order.recipient_address?.full_address || '';
-            return name.includes('***') || name.includes('**') ||
-                   phone.includes('***') || phone.includes('*****') ||
-                   address.includes('***') || address.includes('**');
-          });
-
-          // If we have credentials and masked data detected, auto-fetch
-          if (hasMaskedData && credentials) {
-            console.log('Detected masked customer data in shipped orders, auto-fetching from API...');
-
-            // Fetch last 90 days to refresh all shipped orders
-            const now = new Date();
-            const ninetyDaysAgo = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
-
-            handleFetchOrders({
-              create_time_ge: Math.floor(ninetyDaysAgo.getTime() / 1000),
-              create_time_lt: Math.floor(now.getTime() / 1000)
-            });
-          }
         }
 
         // Auto-set filter to current month (start of month to today)
@@ -148,11 +131,8 @@ export default function Processed() {
       }
     };
 
-    // Only run when we have credentials loaded
-    if (credentials) {
-      loadOrdersFromDB();
-    }
-  }, [credentials]); // Re-run when credentials are loaded
+    loadOrdersFromDB();
+  }, []);
 
   const handleFetchOrders = async (filters = {}) => {
     if (!credentials) return;
