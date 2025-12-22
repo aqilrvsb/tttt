@@ -170,19 +170,20 @@ export default function Orders() {
                  address.includes('***') || address.includes('**');
         });
 
-        // If data is masked, get original data from database
+        // Always get DB orders to preserve unmasked data
+        console.log('Fetching existing orders from database...');
+        const dbOrders = await getAllOrdersFromDB();
+
+        // Create map of DB orders by order_id
+        const dbOrdersMap = new Map(
+          dbOrders
+            .filter(o => o.order_data)
+            .map(o => [o.order_data.id, o.order_data])
+        );
+
+        // If data is masked, replace with database data
         if (hasMaskedData) {
-          console.log('Detected masked customer data, fetching from database...');
-
-          // Get fresh data from database
-          const dbOrders = await getAllOrdersFromDB();
-
-          // Create map of DB orders by order_id
-          const dbOrdersMap = new Map(
-            dbOrders
-              .filter(o => o.order_data)
-              .map(o => [o.order_data.id, o.order_data])
-          );
+          console.log('Detected masked customer data, preserving from database...');
 
           // Replace masked data with database data
           fetchedOrders = fetchedOrders.map(fetchedOrder => {
@@ -235,14 +236,43 @@ export default function Orders() {
         setPageToken(data.next_page_token);
 
         // Save ALL fetched orders to Supabase (upsert will handle updates)
+        // IMPORTANT: Don't overwrite unmasked customer data with masked data
         for (const order of fetchedOrders) {
           try {
+            const customerName = order.recipient_address?.name || '';
+            const customerPhone = order.recipient_address?.phone_number || '';
+            const customerAddress = order.recipient_address?.full_address || '';
+
+            // Check if current data is masked
+            const isMasked = customerName.includes('***') || customerName.includes('**') ||
+                           customerPhone.includes('***') || customerPhone.includes('*****') ||
+                           customerAddress.includes('***') || customerAddress.includes('**');
+
+            // If masked, check if we have unmasked data in DB
+            let finalCustomerName = customerName;
+            let finalCustomerPhone = customerPhone;
+            let finalCustomerAddress = customerAddress;
+
+            if (isMasked) {
+              const dbOrder = dbOrdersMap.get(order.id);
+              if (dbOrder && dbOrder.recipient_address) {
+                const dbName = dbOrder.recipient_address.name || '';
+                const dbPhone = dbOrder.recipient_address.phone_number || '';
+                const dbAddress = dbOrder.recipient_address.full_address || '';
+
+                // Use DB data if it's not masked
+                if (!dbName.includes('***')) finalCustomerName = dbName;
+                if (!dbPhone.includes('***')) finalCustomerPhone = dbPhone;
+                if (!dbAddress.includes('***')) finalCustomerAddress = dbAddress;
+              }
+            }
+
             await saveOrder({
               order_id: order.id,
               order_status: order.status,
-              customer_name: order.recipient_address?.name,
-              customer_phone: order.recipient_address?.phone_number,
-              customer_address: order.recipient_address?.full_address,
+              customer_name: finalCustomerName,
+              customer_phone: finalCustomerPhone,
+              customer_address: finalCustomerAddress,
               total_amount: order.payment?.total_amount,
               currency: order.payment?.currency,
               created_at: new Date(order.create_time * 1000).toISOString(),
@@ -353,10 +383,53 @@ export default function Orders() {
     });
 
     try {
+      // Get existing orders from DB to preserve unmasked customer data
+      const dbOrders = await getAllOrdersFromDB();
+      const dbOrdersMap = new Map(
+        dbOrders
+          .filter(o => o.order_data)
+          .map(o => [o.order_data.id, o.order_data])
+      );
+
       const waybillUrls = [];
       const shippedOrders = [];
       const errors = [];
       let processedCount = 0;
+
+      // Helper function to get customer data (preserve unmasked data from DB)
+      const getCustomerData = (order) => {
+        const customerName = order.recipient_address?.name || '';
+        const customerPhone = order.recipient_address?.phone_number || '';
+        const customerAddress = order.recipient_address?.full_address || '';
+
+        // Check if current data is masked
+        const isMasked = customerName.includes('***') || customerName.includes('**') ||
+                       customerPhone.includes('***') || customerPhone.includes('*****') ||
+                       customerAddress.includes('***') || customerAddress.includes('**');
+
+        if (isMasked) {
+          // Try to get unmasked data from DB
+          const dbOrder = dbOrdersMap.get(order.id);
+          if (dbOrder && dbOrder.recipient_address) {
+            const dbName = dbOrder.recipient_address.name || '';
+            const dbPhone = dbOrder.recipient_address.phone_number || '';
+            const dbAddress = dbOrder.recipient_address.full_address || '';
+
+            // Use DB data if it's not masked
+            return {
+              customer_name: !dbName.includes('***') ? dbName : customerName,
+              customer_phone: !dbPhone.includes('***') ? dbPhone : customerPhone,
+              customer_address: !dbAddress.includes('***') ? dbAddress : customerAddress
+            };
+          }
+        }
+
+        return {
+          customer_name: customerName,
+          customer_phone: customerPhone,
+          customer_address: customerAddress
+        };
+      };
 
       for (const order of ordersToProcess) {
         processedCount++;
@@ -384,6 +457,9 @@ export default function Orders() {
             continue;
           }
 
+          // Get customer data (preserving unmasked from DB if needed)
+          const customerData = getCustomerData(order);
+
           // Try to get waybill first (might already be shipped)
           try {
             const doc = await getShippingDocument(credentials, packageId, 'SHIPPING_LABEL');
@@ -395,9 +471,7 @@ export default function Orders() {
                 order_id: order.id,
                 order_status: order.status,
                 waybill_url: doc.doc_url,
-                customer_name: order.recipient_address?.name,
-                customer_phone: order.recipient_address?.phone_number,
-                customer_address: order.recipient_address?.full_address,
+                ...customerData,
                 total_amount: order.payment?.total_amount,
                 currency: order.payment?.currency,
                 created_at: new Date(order.create_time * 1000).toISOString(),
@@ -423,14 +497,12 @@ export default function Orders() {
               if (doc.doc_url) {
                 waybillUrls.push(doc.doc_url);
 
-                // Save waybill URL to database
+                // Save waybill URL to database with updated status
                 await saveOrder({
                   order_id: order.id,
                   order_status: 'AWAITING_COLLECTION',
                   waybill_url: doc.doc_url,
-                  customer_name: order.recipient_address?.name,
-                  customer_phone: order.recipient_address?.phone_number,
-                  customer_address: order.recipient_address?.full_address,
+                  ...customerData,
                   total_amount: order.payment?.total_amount,
                   currency: order.payment?.currency,
                   created_at: new Date(order.create_time * 1000).toISOString(),
@@ -479,13 +551,10 @@ export default function Orders() {
         });
       }
 
-      // Refresh orders to update status
+      // Reload orders from database to get updated status
       if (shippedOrders.length > 0) {
-        setAllOrders(prev => prev.map(o =>
-          shippedOrders.includes(o.id)
-            ? { ...o, status: 'AWAITING_COLLECTION' }
-            : o
-        ));
+        const updatedOrders = await getAllOrdersFromDB();
+        setAllOrders(updatedOrders.map(o => o.order_data).filter(Boolean));
       }
 
       // Open or merge waybills

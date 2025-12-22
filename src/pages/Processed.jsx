@@ -1,17 +1,26 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Swal from 'sweetalert2';
 import StatsCard from '../components/StatsCard';
+import FilterBar from '../components/FilterBar';
 import BulkActions from '../components/BulkActions';
 import OrderTable from '../components/OrderTable';
 import OrderDetailModal from '../components/OrderDetailModal';
-import { getAllOrdersFromDB } from '../lib/supabase';
+import { searchOrders, getOrderDetails } from '../lib/tiktokApi';
+import { saveOrder, getAllOrdersFromDB } from '../lib/supabase';
 
 export default function Processed() {
   const navigate = useNavigate();
 
+  // Auth state
+  const [credentials, setCredentials] = useState(null);
+  const [shopInfo, setShopInfo] = useState(null);
+
   // Data state
   const [allOrders, setAllOrders] = useState([]);
   const [selectedOrders, setSelectedOrders] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [pageToken, setPageToken] = useState('');
   const [clientFilters, setClientFilters] = useState({
     startDate: '',
     endDate: '',
@@ -64,7 +73,21 @@ export default function Processed() {
     };
   }, [orders]);
 
-  // Load orders from Supabase on mount
+  // Check authentication on mount
+  useEffect(() => {
+    const savedCredentials = localStorage.getItem('tiktok_credentials');
+    const savedShopInfo = localStorage.getItem('shop_info');
+
+    if (!savedCredentials || !savedShopInfo) {
+      navigate('/');
+      return;
+    }
+
+    setCredentials(JSON.parse(savedCredentials));
+    setShopInfo(JSON.parse(savedShopInfo));
+  }, [navigate]);
+
+  // Load orders from Supabase on mount and auto-fetch if masked
   useEffect(() => {
     const loadOrdersFromDB = async () => {
       try {
@@ -81,6 +104,34 @@ export default function Processed() {
 
         if (convertedOrders.length > 0) {
           setAllOrders(convertedOrders);
+
+          // Check if any shipped orders (not COMPLETED) have masked data
+          const shippedOrders = convertedOrders.filter(o =>
+            ['AWAITING_COLLECTION', 'IN_TRANSIT', 'DELIVERED'].includes(o.status)
+          );
+
+          const hasMaskedData = shippedOrders.some(order => {
+            const name = order.recipient_address?.name || '';
+            const phone = order.recipient_address?.phone_number || '';
+            const address = order.recipient_address?.full_address || '';
+            return name.includes('***') || name.includes('**') ||
+                   phone.includes('***') || phone.includes('*****') ||
+                   address.includes('***') || address.includes('**');
+          });
+
+          // If we have credentials and masked data detected, auto-fetch
+          if (hasMaskedData && credentials) {
+            console.log('Detected masked customer data in shipped orders, auto-fetching from API...');
+
+            // Fetch last 90 days to refresh all shipped orders
+            const now = new Date();
+            const ninetyDaysAgo = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
+
+            handleFetchOrders({
+              create_time_ge: Math.floor(ninetyDaysAgo.getTime() / 1000),
+              create_time_lt: Math.floor(now.getTime() / 1000)
+            });
+          }
         }
 
         // Auto-set filter to current month (start of month to today)
@@ -97,8 +148,11 @@ export default function Processed() {
       }
     };
 
-    loadOrdersFromDB();
-  }, []);
+    // Only run when we have credentials loaded
+    if (credentials) {
+      loadOrdersFromDB();
+    }
+  }, [credentials]); // Re-run when credentials are loaded
 
   const handleFetchOrders = async (filters = {}) => {
     if (!credentials) return;
@@ -454,57 +508,21 @@ export default function Processed() {
         />
       </div>
 
-      {/* Filters - Only client-side filtering, no fetch */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Filter Displayed Orders</h3>
-        <div className="flex flex-wrap items-end gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Start Date
-            </label>
-            <input
-              type="date"
-              name="startDate"
-              value={clientFilters.startDate}
-              onChange={(e) => setClientFilters({ ...clientFilters, startDate: e.target.value })}
-              className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
-          </div>
+      {/* Filters */}
+      <FilterBar
+        onFetch={handleFetchOrders}
+        onFilterChange={setClientFilters}
+        loading={loading}
+        initialFilters={clientFilters}
+        statusOptions={[
+          { value: 'AWAITING_COLLECTION', label: 'Awaiting Collection' },
+          { value: 'IN_TRANSIT', label: 'In Transit' },
+          { value: 'DELIVERED', label: 'Delivered' },
+          { value: 'COMPLETED', label: 'Completed (note: customer data will be masked)' }
+        ]}
+      />
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              End Date
-            </label>
-            <input
-              type="date"
-              name="endDate"
-              value={clientFilters.endDate}
-              onChange={(e) => setClientFilters({ ...clientFilters, endDate: e.target.value })}
-              className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Status
-            </label>
-            <select
-              name="status"
-              value={clientFilters.status}
-              onChange={(e) => setClientFilters({ ...clientFilters, status: e.target.value })}
-              className="w-auto min-w-[180px] px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            >
-              <option value="">All Status</option>
-              <option value="AWAITING_COLLECTION">Awaiting Collection</option>
-              <option value="IN_TRANSIT">In Transit</option>
-              <option value="DELIVERED">Delivered</option>
-              <option value="COMPLETED">Completed</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Bulk Actions - No buttons for shipped orders */}
+      {/* Bulk Actions - No buttons for shipped page */}
       <BulkActions
         selectedCount={selectedOrders.length}
         onShipSelected={null}
@@ -521,14 +539,8 @@ export default function Processed() {
         selectedOrders={selectedOrders}
         onSelectOrder={handleSelectOrder}
         onSelectAll={handleSelectAll}
-        onShipOrder={null}
         onViewDetails={handleViewDetails}
       />
-
-      {/* Pagination Info */}
-      <div className="text-center text-gray-500 text-sm mt-6">
-        Showing {orders.length} orders
-      </div>
 
       {/* Order Detail Modal */}
       <OrderDetailModal
