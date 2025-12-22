@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export default function FilterBar({ onFetch, onFilterChange, loading }) {
+export default function FilterBar({ onFetch, onFilterChange, loading, statusOptions = [] }) {
   const [fetchDate, setFetchDate] = useState('');
   const [filters, setFilters] = useState({
     startDate: '',
@@ -108,13 +108,11 @@ export default function FilterBar({ onFetch, onFilterChange, loading }) {
                 className="w-auto min-w-[180px] px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               >
                 <option value="">All Status</option>
-                <option value="UNPAID">Unpaid</option>
-                <option value="AWAITING_SHIPMENT">Awaiting Shipment</option>
-                <option value="AWAITING_COLLECTION">Awaiting Collection</option>
-                <option value="IN_TRANSIT">In Transit</option>
-                <option value="DELIVERED">Delivered</option>
-                <option value="COMPLETED">Completed</option>
-                <option value="CANCELLED">Cancelled</option>
+                {statusOptions.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </div>
           </div>

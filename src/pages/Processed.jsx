@@ -401,6 +401,12 @@ export default function Processed() {
         onFetch={handleFetchOrders}
         onFilterChange={setClientFilters}
         loading={loading}
+        statusOptions={[
+          { value: 'AWAITING_COLLECTION', label: 'Awaiting Collection' },
+          { value: 'IN_TRANSIT', label: 'In Transit' },
+          { value: 'DELIVERED', label: 'Delivered' },
+          { value: 'COMPLETED', label: 'Completed' }
+        ]}
       />
 
       {/* Bulk Actions - No ship button for processed orders */}

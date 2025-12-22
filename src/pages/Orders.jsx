@@ -415,6 +415,10 @@ export default function Orders() {
         onFetch={handleFetchOrders}
         onFilterChange={setClientFilters}
         loading={loading}
+        statusOptions={[
+          { value: 'UNPAID', label: 'Unpaid' },
+          { value: 'AWAITING_SHIPMENT', label: 'Awaiting Shipment' }
+        ]}
       />
 
       {/* Bulk Actions */}
