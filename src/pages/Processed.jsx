@@ -398,7 +398,7 @@ export default function Processed() {
     if (!detailsText || detailsText.trim() === '') return;
 
     try {
-      // Parse the pasted text (format: name\nphone\naddress\nzip)
+      // Parse the pasted text (format: name\nphone\naddress_line1\naddress_line2\npostal_code)
       const lines = detailsText.trim().split('\n').map(line => line.trim());
 
       if (lines.length < 3) {
@@ -409,15 +409,14 @@ export default function Processed() {
       const name = lines[0] || '';
       const phone = lines[1] || '';
 
-      // Combine remaining lines as address (handle multi-line addresses)
+      // Last line is postal code
+      const postalCode = lines[lines.length - 1] || '';
+
+      // Combine all lines from index 2 onwards as address (including postal code)
       const addressParts = lines.slice(2);
       const fullAddress = addressParts.join(', ');
 
-      // Extract zip code from address (last 5 digits)
-      const zipMatch = fullAddress.match(/\b\d{5}\b/);
-      const zipCode = zipMatch ? zipMatch[0] : '';
-
-      console.log('Parsed customer details:', { name, phone, fullAddress, zipCode });
+      console.log('Parsed customer details:', { name, phone, fullAddress, postalCode });
 
       // Update order in state
       const updatedOrder = {
@@ -426,7 +425,8 @@ export default function Processed() {
           ...order.recipient_address,
           name,
           phone_number: phone,
-          full_address: fullAddress
+          full_address: fullAddress,
+          zipcode: postalCode
         },
         manual_details: detailsText
       };
