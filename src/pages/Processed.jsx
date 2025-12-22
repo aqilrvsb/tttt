@@ -160,48 +160,74 @@ export default function Processed() {
   // Silent refresh to unmask customer data (no UI popup)
   // This only calls getOrderDetails for specific masked orders, does NOT search for new orders
   const silentRefreshForUnmasking = async (maskedOrders) => {
-    if (!credentials || !maskedOrders || maskedOrders.length === 0) return;
+    if (!credentials) {
+      console.warn('Cannot unmask orders: No credentials available');
+      return;
+    }
+
+    if (!maskedOrders || maskedOrders.length === 0) {
+      console.log('No masked orders to unmask');
+      return;
+    }
 
     try {
-      console.log(`Checking ${maskedOrders.length} orders for unmasked customer data...`);
+      console.log(`🔍 Checking ${maskedOrders.length} masked orders for unmasking...`);
+      console.log('Order IDs:', maskedOrders.map(o => o.id.slice(-8)).join(', '));
 
       // Get order IDs that need unmasking
       const orderIds = maskedOrders.map(o => o.id);
 
       // Call getOrderDetails API to get unmasked data
+      console.log('📞 Calling getOrderDetails API...');
       const details = await getOrderDetails(credentials, orderIds);
       const fetchedOrders = details.orders || [];
 
+      console.log(`✅ API returned ${fetchedOrders.length} orders`);
+
       if (fetchedOrders.length === 0) {
-        console.log('No orders returned from API');
+        console.warn('⚠️ No orders returned from API');
         return;
       }
 
       // Update local state and database
       let unmaskedCount = 0;
+      let stillMaskedCount = 0;
 
       for (const fetchedOrder of fetchedOrders) {
         const originalOrder = maskedOrders.find(o => o.id === fetchedOrder.id);
 
-        if (!originalOrder) continue;
+        if (!originalOrder) {
+          console.warn(`Order ${fetchedOrder.id.slice(-8)} not found in original masked orders`);
+          continue;
+        }
 
         // Check if the fetched data is now unmasked
         const fetchedName = fetchedOrder.recipient_address?.name || '';
         const originalName = originalOrder.recipient_address?.name || '';
+        const fetchedPhone = fetchedOrder.recipient_address?.phone_number || '';
 
-        const wasUnmasked = !fetchedName.includes('***') && originalName.includes('***');
+        console.log(`Order ${fetchedOrder.id.slice(-8)}:`);
+        console.log(`  Original name: ${originalName}`);
+        console.log(`  Fetched name: ${fetchedName}`);
+        console.log(`  Fetched phone: ${fetchedPhone}`);
+
+        const isStillMasked = fetchedName.includes('***') || fetchedName.includes('**');
+        const wasUnmasked = !isStillMasked && originalName.includes('***');
 
         if (wasUnmasked) {
           unmaskedCount++;
-          console.log(`Unmasked customer data for order ${fetchedOrder.id.slice(-8)}`);
+          console.log(`  ✅ Successfully unmasked!`);
+        } else if (isStillMasked) {
+          stillMaskedCount++;
+          console.log(`  ⚠️ Still masked (TikTok may have already masked this order)`);
         }
 
-        // Update in allOrders state
+        // Update in allOrders state (regardless of mask status, update with latest data)
         setAllOrders(prev => prev.map(o =>
           o.id === fetchedOrder.id ? { ...fetchedOrder, saved_waybill_url: o.saved_waybill_url } : o
         ));
 
-        // Save unmasked data to database
+        // Save to database
         try {
           await saveOrder({
             order_id: fetchedOrder.id,
@@ -214,14 +240,19 @@ export default function Processed() {
             created_at: new Date(fetchedOrder.create_time * 1000).toISOString(),
             updated_at: new Date(fetchedOrder.update_time * 1000).toISOString()
           }, fetchedOrder);
+          console.log(`  💾 Saved to database`);
         } catch (e) {
-          console.warn(`Failed to save order ${fetchedOrder.id} to Supabase:`, e);
+          console.error(`  ❌ Failed to save to database:`, e);
         }
       }
 
-      console.log(`Successfully unmasked ${unmaskedCount} out of ${fetchedOrders.length} orders`);
+      console.log(`\n📊 Summary:`);
+      console.log(`  - Successfully unmasked: ${unmaskedCount}`);
+      console.log(`  - Still masked: ${stillMaskedCount}`);
+      console.log(`  - Total processed: ${fetchedOrders.length}`);
     } catch (error) {
-      console.error('Silent refresh failed:', error);
+      console.error('❌ Silent refresh failed:', error);
+      console.error('Error details:', error.message);
     }
   };
 
