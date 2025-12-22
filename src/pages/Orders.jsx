@@ -249,50 +249,37 @@ export default function Orders() {
     try {
       // Collect all waybill URLs
       const waybillUrls = [];
-      const errors = [];
 
       for (const order of ordersToDownload) {
-        try {
-          const packageId = order.packages?.[0]?.id;
-          if (packageId) {
-            const doc = await getShippingDocument(credentials, packageId, 'SHIPPING_LABEL');
-            if (doc.doc_url) {
-              waybillUrls.push(doc.doc_url);
-            }
-          } else {
-            errors.push(`Order ${order.id?.slice(-8)}: No package ID found`);
+        const packageId = order.packages?.[0]?.id;
+        if (packageId) {
+          const doc = await getShippingDocument(credentials, packageId, 'SHIPPING_LABEL');
+          if (doc.doc_url) {
+            waybillUrls.push(doc.doc_url);
           }
-        } catch (e) {
-          errors.push(`Order ${order.id?.slice(-8)}: ${e.message}`);
         }
-      }
-
-      if (waybillUrls.length === 0) {
-        alert('No waybills available for selected orders.\n\nPossible reasons:\n- Orders not shipped yet\n- Shipping documents not ready\n\nErrors:\n' + errors.join('\n'));
-        return;
       }
 
       // If only one waybill, open directly
       if (waybillUrls.length === 1) {
         window.open(waybillUrls[0], '_blank');
+        setPrintLoading(false);
         return;
       }
 
       // Merge multiple waybills using Supabase edge function
-      const mergedPdfBlob = await mergeWaybills(waybillUrls);
+      if (waybillUrls.length > 1) {
+        const mergedPdfBlob = await mergeWaybills(waybillUrls);
 
-      if (mergedPdfBlob) {
-        // Create object URL and open in new tab
-        const url = URL.createObjectURL(mergedPdfBlob);
-        window.open(url, '_blank');
-      } else {
-        // Fallback: open all waybills in separate tabs
-        alert(`Could not merge PDFs. Opening ${waybillUrls.length} waybills in separate tabs.`);
-        waybillUrls.forEach(url => window.open(url, '_blank'));
-      }
-
-      if (errors.length > 0) {
-        console.warn('Some waybills failed:', errors);
+        if (mergedPdfBlob) {
+          // Create object URL and open in new tab
+          const url = URL.createObjectURL(mergedPdfBlob);
+          window.open(url, '_blank');
+        } else {
+          // Fallback: open all waybills in separate tabs
+          alert(`Could not merge PDFs. Opening ${waybillUrls.length} waybills in separate tabs.`);
+          waybillUrls.forEach(url => window.open(url, '_blank'));
+        }
       }
     } catch (error) {
       console.error('Failed to print waybills:', error);
