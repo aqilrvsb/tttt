@@ -494,6 +494,7 @@ export default function Processed() {
         onFilterChange={setClientFilters}
         loading={loading}
         initialFilters={clientFilters}
+        showFetchSection={false}
         statusOptions={[
           { value: 'AWAITING_COLLECTION', label: 'Awaiting Collection' },
           { value: 'IN_TRANSIT', label: 'In Transit' },

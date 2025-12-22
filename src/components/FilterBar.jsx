@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-export default function FilterBar({ onFetch, onFilterChange, loading, statusOptions = [], initialFilters = {} }) {
+export default function FilterBar({ onFetch, onFilterChange, loading, statusOptions = [], initialFilters = {}, showFetchSection = true }) {
   const [fetchDate, setFetchDate] = useState('');
   const [filters, setFilters] = useState({
     startDate: initialFilters.startDate || '',
@@ -55,32 +55,34 @@ export default function FilterBar({ onFetch, onFilterChange, loading, statusOpti
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       <form onSubmit={handleFetch} className="space-y-6">
-        {/* Fetch Section */}
-        <div className="border-b border-gray-200 pb-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Fetch Orders from TikTok API</h3>
-          <div className="flex flex-wrap items-end gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Fetch Date <span className="text-gray-500 font-normal">(optional - leave empty for last 90 days)</span>
-              </label>
-              <input
-                type="date"
-                value={fetchDate}
-                onChange={(e) => setFetchDate(e.target.value)}
-                className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                placeholder="Leave empty to fetch all orders"
-              />
-            </div>
+        {/* Fetch Section - Only show if showFetchSection is true */}
+        {showFetchSection && (
+          <div className="border-b border-gray-200 pb-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Fetch Orders from TikTok API</h3>
+            <div className="flex flex-wrap items-end gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Fetch Date <span className="text-gray-500 font-normal">(optional - leave empty for last 90 days)</span>
+                </label>
+                <input
+                  type="date"
+                  value={fetchDate}
+                  onChange={(e) => setFetchDate(e.target.value)}
+                  className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  placeholder="Leave empty to fetch all orders"
+                />
+              </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="bg-primary-600 hover:bg-primary-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
-            >
-              {loading ? 'Fetching...' : 'Fetch Orders'}
-            </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="bg-primary-600 hover:bg-primary-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
+              >
+                {loading ? 'Fetching...' : 'Fetch Orders'}
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Filter Section */}
         <div>
