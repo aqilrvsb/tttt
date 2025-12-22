@@ -9,7 +9,7 @@ import OrderDetailModal from '../components/OrderDetailModal';
 import { searchOrders, getOrderDetails } from '../lib/tiktokApi';
 import { saveOrder, getAllOrdersFromDB, getUserCredentials } from '../lib/supabase';
 
-export default function Processed() {
+export default function Completed() {
   const navigate = useNavigate();
 
   // Auth state
@@ -32,10 +32,10 @@ export default function Processed() {
   const [selectedOrderForDetail, setSelectedOrderForDetail] = useState(null);
   const [refreshingOrderId, setRefreshingOrderId] = useState(null);
 
-  // Filter orders - "Shipped" tab (match TikTok Shop) - Exclude COMPLETED
+  // Filter orders - "Completed" tab (only COMPLETED status)
   const orders = useMemo(() => {
     let filtered = allOrders.filter(o =>
-      ['AWAITING_COLLECTION', 'IN_TRANSIT', 'DELIVERED'].includes(o.status)
+      o.status === 'COMPLETED'
     );
 
     // Apply client-side date filters
@@ -57,33 +57,18 @@ export default function Processed() {
     return filtered;
   }, [allOrders, clientFilters]);
 
-  // Stats for "Shipped" orders (match TikTok Shop)
+  // Stats for "Completed" orders
   const stats = useMemo(() => {
     const uniqueCustomers = new Set(orders.map(o => o.recipient_address?.phone_number).filter(Boolean));
     const totalAmount = orders.reduce((sum, o) => sum + (parseFloat(o.payment?.total_amount) || 0), 0);
     const currency = orders[0]?.payment?.currency || 'MYR';
 
-    // Check how many orders have complete details (not masked)
-    const ordersWithDetails = orders.filter(o => {
-      const name = o.recipient_address?.name || '';
-      const phone = o.recipient_address?.phone_number || '';
-      const address = o.recipient_address?.full_address || '';
-      return !name.includes('***') && !phone.includes('***') && !address.includes('***') &&
-             name !== '' && phone !== '' && address !== '';
-    });
-
-    const ordersNeedingDetails = orders.length - ordersWithDetails.length;
-
     return {
       totalOrders: orders.length,
       totalCustomers: uniqueCustomers.size,
-      awaitingCollection: orders.filter(o => o.status === 'AWAITING_COLLECTION').length,
-      inTransit: orders.filter(o => o.status === 'IN_TRANSIT').length,
-      delivered: orders.filter(o => o.status === 'DELIVERED').length,
+      completed: orders.length,
       totalPrice: totalAmount,
-      currency,
-      ordersWithDetails: ordersWithDetails.length,
-      ordersNeedingDetails
+      currency
     };
   }, [orders]);
 
@@ -748,27 +733,17 @@ export default function Processed() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-primary-600 to-blue-600 bg-clip-text text-transparent">
-          Shipped
+        <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+          Completed
         </h1>
-        <p className="text-gray-600 mt-2">Orders that have been shipped and on the way to customers</p>
+        <p className="text-gray-600 mt-2">Orders that have been successfully completed</p>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <StatsCard
-          title="Total Shipped"
+          title="Total Completed"
           value={stats.totalOrders}
-          color="cyan"
-          icon={
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-          }
-        />
-        <StatsCard
-          title="Got Details"
-          value={stats.ordersWithDetails}
           color="green"
           icon={
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -777,47 +752,17 @@ export default function Processed() {
           }
         />
         <StatsCard
-          title="Remaining Details"
-          value={stats.ordersNeedingDetails}
-          color="red"
-          icon={
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          }
-        />
-        <StatsCard
-          title="In Transit"
-          value={stats.inTransit}
+          title="Unique Customers"
+          value={stats.totalCustomers}
           color="blue"
           icon={
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
             </svg>
           }
         />
         <StatsCard
-          title="Awaiting Collection"
-          value={stats.awaitingCollection}
-          color="yellow"
-          icon={
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-            </svg>
-          }
-        />
-        <StatsCard
-          title="Delivered"
-          value={stats.delivered}
-          color="green"
-          icon={
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-            </svg>
-          }
-        />
-        <StatsCard
-          title="Total Sales"
+          title="Total Revenue"
           value={formatPrice(stats.totalPrice, stats.currency)}
           color="purple"
           icon={
@@ -828,27 +773,17 @@ export default function Processed() {
         />
       </div>
 
-      {/* Fetch Active Shipped Orders Button */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex gap-3">
+      {/* Fetch Completed Orders Button */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
         <button
-          onClick={() => handleFetchOrders({ order_status: 'IN_TRANSIT' })}
-          disabled={loading}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md flex items-center gap-2"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-          </svg>
-          {loading ? 'Fetching...' : 'Fetch In-Transit Orders'}
-        </button>
-        <button
-          onClick={() => handleFetchOrders({ order_status: 'DELIVERED' })}
+          onClick={() => handleFetchOrders({ order_status: 'COMPLETED' })}
           disabled={loading}
           className="bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md flex items-center gap-2"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          {loading ? 'Fetching...' : 'Fetch Delivered Orders'}
+          {loading ? 'Fetching...' : 'Fetch Completed Orders'}
         </button>
       </div>
 
@@ -860,13 +795,11 @@ export default function Processed() {
         initialFilters={clientFilters}
         showFetchSection={false}
         statusOptions={[
-          { value: 'AWAITING_COLLECTION', label: 'Awaiting Collection' },
-          { value: 'IN_TRANSIT', label: 'In Transit' },
-          { value: 'DELIVERED', label: 'Delivered' }
+          { value: 'COMPLETED', label: 'Completed' }
         ]}
       />
 
-      {/* Bulk Actions - No buttons for shipped page */}
+      {/* Bulk Actions - No buttons for completed page */}
       <BulkActions
         selectedCount={selectedOrders.length}
         onShipSelected={null}
@@ -874,7 +807,7 @@ export default function Processed() {
         onDownloadWaybills={null}
         loading={false}
         printLoading={false}
-        activeTab="processed"
+        activeTab="completed"
       />
 
       {/* Orders Table */}

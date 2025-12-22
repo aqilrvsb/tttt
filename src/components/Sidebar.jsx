@@ -9,7 +9,8 @@ export default function Sidebar() {
 
   const navItems = [
     { path: '/orders', icon: '📦', label: 'To Ship' },
-    { path: '/processed', icon: '✅', label: 'Shipped' },
+    { path: '/processed', icon: '🚚', label: 'Shipped' },
+    { path: '/completed', icon: '✅', label: 'Completed' },
     { path: '/settings', icon: '⚙️', label: 'Settings' },
   ];
 

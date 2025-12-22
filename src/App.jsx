@@ -5,6 +5,7 @@ import Layout from './components/Layout';
 import Login from './pages/Login';
 import Orders from './pages/Orders';
 import Processed from './pages/Processed';
+import Completed from './pages/Completed';
 import Settings from './pages/Settings';
 
 function App() {
@@ -32,6 +33,16 @@ function App() {
               <ProtectedRoute>
                 <Layout>
                   <Processed />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/completed"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <Completed />
                 </Layout>
               </ProtectedRoute>
             }
