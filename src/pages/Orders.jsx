@@ -78,9 +78,13 @@ export default function Orders() {
         const dbOrders = await getAllOrdersFromDB();
 
         // Convert DB orders back to TikTok order format
+        // Merge waybill_url from DB into order data
         const convertedOrders = dbOrders
           .filter(dbOrder => dbOrder.order_data) // Only orders with full data
-          .map(dbOrder => dbOrder.order_data);
+          .map(dbOrder => ({
+            ...dbOrder.order_data,
+            saved_waybill_url: dbOrder.waybill_url // Add saved waybill URL
+          }));
 
         if (convertedOrders.length > 0) {
           setAllOrders(convertedOrders);
@@ -251,11 +255,22 @@ export default function Orders() {
       const waybillUrls = [];
 
       for (const order of ordersToDownload) {
+        // First, check if we have a saved waybill URL from database
+        if (order.saved_waybill_url) {
+          waybillUrls.push(order.saved_waybill_url);
+          continue;
+        }
+
+        // If not saved, try to fetch from TikTok API
         const packageId = order.packages?.[0]?.id;
         if (packageId) {
-          const doc = await getShippingDocument(credentials, packageId, 'SHIPPING_LABEL');
-          if (doc.doc_url) {
-            waybillUrls.push(doc.doc_url);
+          try {
+            const doc = await getShippingDocument(credentials, packageId, 'SHIPPING_LABEL');
+            if (doc.doc_url) {
+              waybillUrls.push(doc.doc_url);
+            }
+          } catch (e) {
+            console.warn(`Failed to get waybill for order ${order.id}:`, e.message);
           }
         }
       }
@@ -300,6 +315,13 @@ export default function Orders() {
 
     for (const order of ordersToDownload) {
       try {
+        // First, check if we have a saved waybill URL
+        if (order.saved_waybill_url) {
+          window.open(order.saved_waybill_url, '_blank');
+          continue;
+        }
+
+        // If not saved, try to fetch from TikTok API
         const packageId = order.packages?.[0]?.id;
         if (packageId) {
           const doc = await getShippingDocument(credentials, packageId, 'SHIPPING_LABEL');
