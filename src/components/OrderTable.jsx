@@ -132,10 +132,10 @@ export default function OrderTable({ orders, selectedOrders, onSelectOrder, onSe
                         {customer.phone_number || '-'}
                       </span>
                     </td>
-                    <td className="p-4 align-middle">
-                      <span className="text-gray-700 whitespace-normal break-words">
+                    <td className="p-4 align-middle max-w-xs">
+                      <div className="text-gray-700 line-clamp-3 break-words">
                         {customer.full_address || '-'}
-                      </span>
+                      </div>
                     </td>
                     {!hasCompleteDetails && (
                       <td className="p-4 align-middle">
