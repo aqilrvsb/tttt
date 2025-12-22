@@ -137,16 +137,16 @@ export default function OrderTable({ orders, selectedOrders, onSelectOrder, onSe
                         {customer.full_address || '-'}
                       </div>
                     </td>
-                    {!hasCompleteDetails && (
-                      <td className="p-4 align-middle">
+                    <td className="p-4 align-middle">
+                      {!hasCompleteDetails && (
                         <textarea
                           className="w-48 h-20 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
                           placeholder="Paste customer details here..."
                           defaultValue={order.manual_details || ''}
                           onBlur={(e) => onUpdateDetails && onUpdateDetails(order, e.target.value)}
                         />
-                      </td>
-                    )}
+                      )}
+                    </td>
                     <td className="p-4 align-middle">
                       <span className="text-gray-700 font-mono text-xs">
                         {packageInfo.tracking_number || '-'}
