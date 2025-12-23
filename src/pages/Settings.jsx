@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SOPModal from '../components/SOPModal';
+import SOPAdsModal from '../components/SOPAdsModal';
 import { getAuthorizedShops, getAccessToken } from '../lib/tiktokApi';
 import { saveCredentials } from '../lib/supabase';
 
@@ -19,6 +20,7 @@ export default function Settings() {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [showSOP, setShowSOP] = useState(false);
+  const [showSOPAds, setShowSOPAds] = useState(false);
   const [currentCredentials, setCurrentCredentials] = useState(null);
   const [adsFormData, setAdsFormData] = useState({
     ads_app_key: '',
@@ -513,6 +515,18 @@ export default function Settings() {
           </p>
         </div>
 
+        {/* SOP Button for Ads API */}
+        <button
+          type="button"
+          onClick={() => setShowSOPAds(true)}
+          className="w-full mb-6 py-3 px-4 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 hover:bg-blue-100 transition flex items-center justify-center gap-2 font-medium"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          How to Get TikTok Ads API Credentials (Step-by-Step Guide)
+        </button>
+
         {/* Current Ads Connection Status */}
         {currentAdsCredentials && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
@@ -641,6 +655,9 @@ export default function Settings() {
 
       {/* SOP Modal */}
       <SOPModal isOpen={showSOP} onClose={() => setShowSOP(false)} />
+
+      {/* SOP Ads Modal */}
+      <SOPAdsModal isOpen={showSOPAds} onClose={() => setShowSOPAds(false)} />
     </div>
   );
 }
