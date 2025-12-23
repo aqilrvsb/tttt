@@ -8,13 +8,16 @@ import OrderTable from '../components/OrderTable';
 import OrderDetailModal from '../components/OrderDetailModal';
 import { searchOrders, getOrderDetails, getShippingDocument, shipPackage } from '../lib/tiktokApi';
 import { saveOrder, mergeWaybills, getAllOrdersFromDB } from '../lib/supabase';
+import { getTodayAdSpend, getCustomDateRangeAdSpend, calculateROAS } from '../lib/tiktokAdsApi';
 
 export default function Orders() {
   const navigate = useNavigate();
 
   // Auth state
   const [credentials, setCredentials] = useState(null);
+  const [adsCredentials, setAdsCredentials] = useState(null);
   const [shopInfo, setShopInfo] = useState(null);
+  const [adSpendData, setAdSpendData] = useState({ spend: 0, impressions: 0, clicks: 0, conversions: 0 });
 
   // Data state
   const [allOrders, setAllOrders] = useState([]);
@@ -63,15 +66,20 @@ export default function Orders() {
     const totalAmount = orders.reduce((sum, o) => sum + (parseFloat(o.payment?.total_amount) || 0), 0);
     const currency = orders[0]?.payment?.currency || 'MYR';
 
+    // Calculate ROAS if we have ad spend data
+    const roas = calculateROAS(totalAmount, adSpendData.spend);
+
     return {
       totalOrders: orders.length,
       totalCustomers: uniqueCustomers.size,
       awaitingShipment: orders.filter(o => o.status === 'AWAITING_SHIPMENT').length,
       unpaid: orders.filter(o => o.status === 'UNPAID').length,
       totalPrice: totalAmount,
-      currency
+      currency,
+      adSpend: adSpendData.spend,
+      roas
     };
-  }, [orders]);
+  }, [orders, adSpendData]);
 
   // Check for credentials on mount - redirect to settings if not found
   useEffect(() => {
@@ -88,7 +96,34 @@ export default function Orders() {
       localStorage.removeItem('tiktok_credentials');
       navigate('/settings');
     }
+
+    // Load Ads API credentials if available
+    const savedAds = localStorage.getItem('tiktok_ads_credentials');
+    if (savedAds) {
+      try {
+        const parsedAds = JSON.parse(savedAds);
+        setAdsCredentials(parsedAds);
+      } catch (e) {
+        console.error('Failed to parse ads credentials:', e);
+      }
+    }
   }, [navigate]);
+
+  // Fetch today's ad spend when ads credentials are available
+  useEffect(() => {
+    if (!adsCredentials) return;
+
+    const fetchAdSpend = async () => {
+      try {
+        const data = await getTodayAdSpend(adsCredentials);
+        setAdSpendData(data);
+      } catch (error) {
+        console.error('Failed to fetch ad spend:', error);
+      }
+    };
+
+    fetchAdSpend();
+  }, [adsCredentials]);
 
   // Load orders from Supabase on mount
   useEffect(() => {
@@ -711,6 +746,37 @@ export default function Orders() {
           }
         />
       </div>
+
+      {/* Ad Spend Stats - Only show if Ads API is configured */}
+      {adsCredentials && (
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl shadow-sm border border-blue-200 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            </svg>
+            <h3 className="text-lg font-bold text-gray-900">TikTok Video Ads Performance (Today)</h3>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white rounded-lg p-4 border border-blue-100">
+              <p className="text-sm text-gray-600 mb-1">Ad Spend</p>
+              <p className="text-2xl font-bold text-blue-600">{formatPrice(stats.adSpend, stats.currency)}</p>
+            </div>
+            <div className="bg-white rounded-lg p-4 border border-blue-100">
+              <p className="text-sm text-gray-600 mb-1">ROAS</p>
+              <p className="text-2xl font-bold text-green-600">{stats.roas.toFixed(2)}x</p>
+              <p className="text-xs text-gray-500 mt-1">Return on Ad Spend</p>
+            </div>
+            <div className="bg-white rounded-lg p-4 border border-blue-100">
+              <p className="text-sm text-gray-600 mb-1">Impressions</p>
+              <p className="text-2xl font-bold text-purple-600">{adSpendData.impressions.toLocaleString()}</p>
+            </div>
+            <div className="bg-white rounded-lg p-4 border border-blue-100">
+              <p className="text-sm text-gray-600 mb-1">Clicks</p>
+              <p className="text-2xl font-bold text-orange-600">{adSpendData.clicks.toLocaleString()}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <FilterBar

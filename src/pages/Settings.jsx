@@ -20,6 +20,16 @@ export default function Settings() {
   const [loading, setLoading] = useState(false);
   const [showSOP, setShowSOP] = useState(false);
   const [currentCredentials, setCurrentCredentials] = useState(null);
+  const [adsFormData, setAdsFormData] = useState({
+    ads_app_key: '',
+    ads_app_secret: '',
+    ads_access_token: '',
+    ads_advertiser_id: ''
+  });
+  const [adsError, setAdsError] = useState('');
+  const [adsSuccess, setAdsSuccess] = useState('');
+  const [adsLoading, setAdsLoading] = useState(false);
+  const [currentAdsCredentials, setCurrentAdsCredentials] = useState(null);
 
   // Load existing credentials on mount
   useEffect(() => {
@@ -30,6 +40,16 @@ export default function Settings() {
         setCurrentCredentials(parsed);
       } catch (e) {
         console.error('Failed to parse credentials:', e);
+      }
+    }
+
+    const savedAds = localStorage.getItem('tiktok_ads_credentials');
+    if (savedAds) {
+      try {
+        const parsed = JSON.parse(savedAds);
+        setCurrentAdsCredentials(parsed);
+      } catch (e) {
+        console.error('Failed to parse ads credentials:', e);
       }
     }
   }, []);
@@ -189,6 +209,68 @@ export default function Settings() {
       localStorage.removeItem('tiktok_credentials');
       setCurrentCredentials(null);
       setSuccess('TikTok Shop disconnected successfully');
+    }
+  };
+
+  const handleAdsChange = (e) => {
+    setAdsFormData({
+      ...adsFormData,
+      [e.target.name]: e.target.value
+    });
+  };
+
+  const handleAdsSubmit = async (e) => {
+    e.preventDefault();
+    setAdsError('');
+    setAdsSuccess('');
+    setAdsLoading(true);
+
+    if (!adsFormData.ads_app_key || !adsFormData.ads_app_secret || !adsFormData.ads_access_token || !adsFormData.ads_advertiser_id) {
+      setAdsError('All fields are required');
+      setAdsLoading(false);
+      return;
+    }
+
+    try {
+      // Save to localStorage
+      localStorage.setItem('tiktok_ads_credentials', JSON.stringify(adsFormData));
+
+      // Save to Supabase
+      try {
+        const credentials = JSON.parse(localStorage.getItem('tiktok_credentials') || '{}');
+        if (credentials.app_key) {
+          await saveCredentials({
+            ...credentials,
+            ads_app_key: adsFormData.ads_app_key,
+            ads_app_secret: adsFormData.ads_app_secret,
+            ads_access_token: adsFormData.ads_access_token,
+            ads_advertiser_id: adsFormData.ads_advertiser_id
+          });
+        }
+      } catch (e) {
+        console.warn('Failed to save to Supabase:', e);
+      }
+
+      setCurrentAdsCredentials(adsFormData);
+      setAdsSuccess('TikTok Ads API credentials saved successfully!');
+      setAdsFormData({
+        ads_app_key: '',
+        ads_app_secret: '',
+        ads_access_token: '',
+        ads_advertiser_id: ''
+      });
+    } catch (err) {
+      setAdsError(err.message || 'Failed to save credentials');
+    } finally {
+      setAdsLoading(false);
+    }
+  };
+
+  const handleAdsDisconnect = () => {
+    if (confirm('Are you sure you want to remove TikTok Ads API credentials?')) {
+      localStorage.removeItem('tiktok_ads_credentials');
+      setCurrentAdsCredentials(null);
+      setAdsSuccess('TikTok Ads API credentials removed successfully');
     }
   };
 
@@ -420,6 +502,141 @@ export default function Settings() {
             )}
           </form>
         )}
+      </div>
+
+      {/* TikTok Ads API Settings */}
+      <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-8">
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">TikTok Ads API</h2>
+          <p className="text-gray-600 text-sm">
+            Configure TikTok Marketing API credentials to track ad spend for your TikTok Shop video ads
+          </p>
+        </div>
+
+        {/* Current Ads Connection Status */}
+        {currentAdsCredentials && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-blue-900 mb-2">Connected to TikTok Ads API</h3>
+                <p className="text-sm text-blue-700 mb-1">
+                  <span className="font-medium">App Key:</span> {currentAdsCredentials.ads_app_key}
+                </p>
+                <p className="text-sm text-blue-700">
+                  <span className="font-medium">Advertiser ID:</span> {currentAdsCredentials.ads_advertiser_id}
+                </p>
+              </div>
+              <button
+                onClick={handleAdsDisconnect}
+                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Success Message */}
+        {adsSuccess && (
+          <div className="mb-6 bg-green-100 border border-green-300 text-green-700 px-4 py-3 rounded-lg">
+            {adsSuccess}
+          </div>
+        )}
+
+        <form onSubmit={handleAdsSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Ads App Key
+            </label>
+            <input
+              type="text"
+              name="ads_app_key"
+              value={adsFormData.ads_app_key}
+              onChange={handleAdsChange}
+              className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              placeholder="Enter your TikTok Ads App Key"
+            />
+            <p className="text-xs text-gray-500 mt-1">From TikTok for Business → Developer Tools</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Ads App Secret
+            </label>
+            <input
+              type="password"
+              name="ads_app_secret"
+              value={adsFormData.ads_app_secret}
+              onChange={handleAdsChange}
+              className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              placeholder="Enter your TikTok Ads App Secret"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Ads Access Token
+            </label>
+            <input
+              type="text"
+              name="ads_access_token"
+              value={adsFormData.ads_access_token}
+              onChange={handleAdsChange}
+              className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              placeholder="Enter your TikTok Ads Access Token"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Advertiser ID
+            </label>
+            <input
+              type="text"
+              name="ads_advertiser_id"
+              value={adsFormData.ads_advertiser_id}
+              onChange={handleAdsChange}
+              className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              placeholder="Enter your Advertiser ID"
+            />
+            <p className="text-xs text-gray-500 mt-1">Found in TikTok Ads Manager URL or Settings</p>
+          </div>
+
+          <div className="bg-blue-50 rounded-lg p-4 text-sm border border-blue-100">
+            <p className="text-blue-900 font-medium mb-2">How to get these credentials:</p>
+            <ol className="text-blue-700 space-y-1 list-decimal list-inside">
+              <li>Go to TikTok for Business → Developer Tools</li>
+              <li>Create a Marketing API app</li>
+              <li>Get your App Key & App Secret</li>
+              <li>Authorize and get Access Token</li>
+              <li>Find your Advertiser ID in Ads Manager</li>
+            </ol>
+          </div>
+
+          <button
+            type="submit"
+            disabled={adsLoading}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
+          >
+            {adsLoading ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Saving...
+              </span>
+            ) : (
+              'Save Ads API Credentials'
+            )}
+          </button>
+
+          {adsError && (
+            <div className="text-red-700 text-sm text-center mt-2 p-3 bg-red-100 border border-red-300 rounded-lg">
+              {adsError}
+            </div>
+          )}
+        </form>
       </div>
 
       {/* SOP Modal */}
